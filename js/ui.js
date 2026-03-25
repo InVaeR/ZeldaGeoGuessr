@@ -9,7 +9,7 @@ const UI = {
         game: document.getElementById('screen-game'),
         roundResult: document.getElementById('screen-round-result'),
         final: document.getElementById('screen-final'),
-        calibration: document.getElementById('screen-calibration')
+        tools: document.getElementById('screen-tools')
     },
 
     els: {

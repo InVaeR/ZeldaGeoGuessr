@@ -3,7 +3,7 @@ const CONFIG = {
     MAP_HEIGHT: 15000,
 
     // Расширяем диапазон зума
-    MIN_ZOOM: -3,
+    MIN_ZOOM: -5,
     MAX_ZOOM: 1,
 
     USE_TILES: window.location.protocol !== 'file:',

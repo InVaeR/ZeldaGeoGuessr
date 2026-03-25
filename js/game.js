@@ -5,10 +5,6 @@
 (function () {
     'use strict';
 
-    // ========================
-    //  СОСТОЯНИЕ
-    // ========================
-
     let currentSeries = null;
     let roundIndex = 0;
     let totalScore = 0;
@@ -18,10 +14,6 @@
     let resultMap = null;
     let guessMarker = null;
 
-    // ========================
-    //  ИНИЦИАЛИЗАЦИЯ
-    // ========================
-
     function init() {
         UI.renderSeriesList(LOCATIONS_DATA.series, startGame);
 
@@ -30,15 +22,13 @@
         UI.els.btnBackMenu.addEventListener('click', onBackToMenu);
         UI.els.btnToggleImage.addEventListener('click', () => UI.toggleImage());
         UI.els.locationImage.addEventListener('click', () => UI.openImageFullscreen());
-        document.getElementById('btn-calibration').addEventListener('click', () => Calibration.open());
+
+        // Инструменты (было Calibration.open — теперь Tools.open)
+        document.getElementById('btn-tools').addEventListener('click', () => Tools.open());
 
         UI.createImageOverlay();
         UI.showScreen('menu');
     }
-
-    // ========================
-    //  НАЧАЛО ИГРЫ
-    // ========================
 
     function startGame(seriesIndex) {
         currentSeries = LOCATIONS_DATA.series[seriesIndex];
@@ -59,10 +49,6 @@
             startRound();
         }, 100);
     }
-
-    // ========================
-    //  РАУНД
-    // ========================
 
     function startRound() {
         const round = currentSeries.rounds[roundIndex];
@@ -91,10 +77,6 @@
         UI.setConfirmEnabled(true);
     }
 
-    // ========================
-    //  ПОДТВЕРЖДЕНИЕ
-    // ========================
-
     function onConfirm() {
         if (!guessMarker) return;
 
@@ -117,13 +99,8 @@
         });
 
         gameMap.off('click');
-
         showRoundResult(round, guessPx, distance, score);
     }
-
-    // ========================
-    //  РЕЗУЛЬТАТ РАУНДА
-    // ========================
 
     function showRoundResult(round, guessPx, distance, score) {
         const isLastRound = roundIndex >= currentSeries.rounds.length - 1;
@@ -158,10 +135,6 @@
         }, 100);
     }
 
-    // ========================
-    //  НАВИГАЦИЯ
-    // ========================
-
     function onNextRound() {
         roundIndex++;
 
@@ -187,12 +160,10 @@
         if (gameMap) { gameMap.remove(); gameMap = null; }
         if (resultMap) { resultMap.remove(); resultMap = null; }
 
+        // Обновляем список серий (мог измениться в редакторе)
+        UI.renderSeriesList(LOCATIONS_DATA.series, startGame);
         UI.showScreen('menu');
     }
-
-    // ========================
-    //  ЗАПУСК
-    // ========================
 
     document.addEventListener('DOMContentLoaded', init);
 

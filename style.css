@@ -466,14 +466,14 @@ body {
     border-radius: 50%;
 }
 
-/* ========== CALIBRATION SCREEN ========== */
+/* ========== TOOLS SCREEN ========== */
 
-#screen-calibration {
+#screen-tools {
     flex-direction: column;
     background: #000;
 }
 
-#calibration-hud {
+#tools-hud {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -484,43 +484,83 @@ body {
     border-bottom: 1px solid #333;
 }
 
-#cal-cursor-coords {
+#tools-cursor-coords {
     color: #ffd700;
     font-family: 'Consolas', 'Courier New', monospace;
     font-size: 0.9rem;
 }
 
-#calibration-map {
+#tools-map {
     flex: 1;
     width: 100%;
     z-index: 500;
 }
 
-/* Боковая панель калибровки */
+/* Боковая панель */
 
-#calibration-panel {
+#tools-panel {
     position: absolute;
     top: 55px;
     right: 20px;
     z-index: 1000;
-    width: 320px;
+    width: 340px;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
-    background: rgba(0, 0, 0, 0.92);
+    background: rgba(10, 10, 15, 0.95);
     border-radius: 10px;
     border: 1px solid #333;
-    padding: 16px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-#calibration-panel::-webkit-scrollbar {
+#tools-panel::-webkit-scrollbar {
     width: 6px;
 }
 
-#calibration-panel::-webkit-scrollbar-thumb {
+#tools-panel::-webkit-scrollbar-thumb {
     background: #444;
     border-radius: 3px;
 }
+
+/* Вкладки */
+
+.tools-tabs {
+    display: flex;
+    border-bottom: 1px solid #333;
+}
+
+.tools-tab {
+    flex: 1;
+    padding: 10px 12px;
+    background: transparent;
+    color: #666;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+    border-bottom: 2px solid transparent;
+}
+
+.tools-tab:hover {
+    color: #aaa;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.tools-tab.active {
+    color: #7ec8e3;
+    border-bottom-color: #7ec8e3;
+    background: rgba(126, 200, 227, 0.05);
+}
+
+.tools-tab-content {
+    display: none;
+    padding: 16px;
+}
+
+.tools-tab-content.active {
+    display: block;
+}
+
+/* Секции калибровки */
 
 .cal-section {
     margin-bottom: 16px;
@@ -536,13 +576,11 @@ body {
 
 .cal-section h3 {
     color: #7ec8e3;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 10px;
 }
-
-/* Точки */
 
 .cal-point {
     display: flex;
@@ -564,15 +602,6 @@ body {
     color: #ccc;
     font-family: 'Consolas', 'Courier New', monospace;
     font-size: 0.85rem;
-}
-
-/* Результаты */
-
-.cal-results-section {
-    background: rgba(126, 200, 227, 0.05);
-    border-radius: 8px;
-    padding: 12px !important;
-    margin: 0 -8px 16px -8px;
 }
 
 .cal-result-row {
@@ -601,8 +630,6 @@ body {
     text-align: right;
 }
 
-/* Слайдер */
-
 .cal-slider-row {
     display: flex;
     align-items: center;
@@ -612,40 +639,35 @@ body {
 #cal-d-slider {
     flex: 1;
     accent-color: #7ec8e3;
-    height: 6px;
 }
 
 #cal-d-input {
-    width: 70px;
-    padding: 4px 8px;
+    width: 65px;
+    padding: 4px 6px;
     background: #111;
     color: #fff;
     border: 1px solid #444;
     border-radius: 4px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     text-align: center;
 }
 
 .cal-hint {
-    color: #666;
-    font-size: 0.75rem;
-    margin-top: 8px;
+    color: #555;
+    font-size: 0.72rem;
+    margin-top: 6px;
     line-height: 1.4;
 }
 
-/* Таблица очков */
-
-.cal-score-table {
-    font-size: 0.8rem;
-}
+.cal-score-table { font-size: 0.78rem; }
 
 .cal-table-header {
     display: flex;
     justify-content: space-between;
     padding: 4px 0;
     border-bottom: 1px solid #333;
-    color: #888;
-    font-size: 0.75rem;
+    color: #666;
+    font-size: 0.7rem;
     text-transform: uppercase;
 }
 
@@ -653,35 +675,29 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 3px 0;
+    padding: 2px 0;
     border-bottom: 1px solid #111;
-    color: #aaa;
+    color: #999;
 }
 
 .cal-table-score {
     color: #ffd700;
     font-weight: bold;
-    min-width: 50px;
+    min-width: 45px;
     text-align: right;
 }
 
 .cal-table-pct {
-    color: #666;
-    min-width: 45px;
+    color: #555;
+    min-width: 40px;
     text-align: right;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
 }
 
-/* Кнопки калибровки */
+/* Общие кнопки инструментов */
 
-.cal-buttons {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-}
-
-.btn-cal-control {
-    padding: 8px 14px;
+.btn-tools-control {
+    padding: 6px 14px;
     font-size: 0.85rem;
     background: rgba(255, 255, 255, 0.08);
     color: #ccc;
@@ -689,40 +705,350 @@ body {
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.15s;
-    flex: 1;
 }
 
-.btn-cal-control:hover {
+.btn-tools-control:hover {
     background: rgba(255, 255, 255, 0.15);
     color: #fff;
 }
 
-.btn-cal-apply {
-    background: rgba(126, 200, 227, 0.15);
+.btn-tools-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.06);
+    color: #aaa;
+    border: 1px solid #333;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 8px;
+    display: inline-block;
+}
+
+.btn-tools-sm:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.btn-tools-accent {
     color: #7ec8e3;
-    border-color: #7ec8e3;
+    border-color: rgba(126, 200, 227, 0.3);
+    background: rgba(126, 200, 227, 0.08);
 }
 
-.btn-cal-apply:hover {
-    background: rgba(126, 200, 227, 0.3);
+.btn-tools-accent:hover {
+    background: rgba(126, 200, 227, 0.2);
 }
 
-/* Кнопка калибровки в меню */
+/* Кнопка в меню */
 
-.btn-calibration {
+.menu-tools {
     margin-top: 30px;
-    padding: 12px 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-tools {
+    padding: 12px 28px;
     font-size: 0.95rem;
     background: transparent;
-    color: #666;
-    border: 1px solid #444;
+    color: #555;
+    border: 1px solid #333;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
-.btn-calibration:hover {
+.btn-tools:hover {
     color: #7ec8e3;
     border-color: #7ec8e3;
     background: rgba(126, 200, 227, 0.08);
 }
+
+/* ========== EDITOR ========== */
+
+.editor-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #222;
+}
+
+.editor-section:last-child {
+    border-bottom: none;
+}
+
+.editor-section h3 {
+    color: #7ec8e3;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+/* Список серий */
+
+.editor-series-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.editor-series-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid #222;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.1s;
+}
+
+.editor-series-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.editor-series-item.selected {
+    border-color: #7ec8e3;
+    background: rgba(126, 200, 227, 0.08);
+}
+
+.editor-series-name-input {
+    flex: 1;
+    background: transparent;
+    color: #ccc;
+    border: none;
+    border-bottom: 1px solid transparent;
+    font-size: 0.85rem;
+    padding: 2px 0;
+    outline: none;
+}
+
+.editor-series-name-input:focus {
+    border-bottom-color: #7ec8e3;
+    color: #fff;
+}
+
+.editor-series-count {
+    color: #555;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.editor-series-del {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: all 0.1s;
+}
+
+.editor-series-del:hover {
+    color: #e94560;
+    background: rgba(233, 69, 96, 0.15);
+}
+
+/* Список раундов */
+
+.editor-rounds-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 8px;
+}
+
+.editor-round-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.editor-round-num {
+    color: #555;
+    min-width: 20px;
+}
+
+.editor-round-info {
+    flex: 1;
+    color: #aaa;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'Consolas', monospace;
+    font-size: 0.75rem;
+}
+
+.editor-round-xy {
+    color: #666;
+    font-family: 'Consolas', monospace;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.editor-round-edit-btn,
+.editor-round-del {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    transition: all 0.1s;
+}
+
+.editor-round-edit-btn:hover {
+    color: #7ec8e3;
+    background: rgba(126, 200, 227, 0.15);
+}
+
+.editor-round-del:hover {
+    color: #e94560;
+    background: rgba(233, 69, 96, 0.15);
+}
+
+.editor-empty {
+    color: #444;
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 16px 0;
+}
+
+/* Редактирование раунда */
+
+.editor-field {
+    margin-bottom: 12px;
+}
+
+.editor-field label {
+    display: block;
+    color: #888;
+    font-size: 0.78rem;
+    margin-bottom: 4px;
+}
+
+.editor-input {
+    width: 100%;
+    padding: 6px 8px;
+    background: #111;
+    color: #fff;
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-family: 'Consolas', monospace;
+}
+
+.editor-input:focus {
+    border-color: #7ec8e3;
+    outline: none;
+}
+
+.editor-input-sm {
+    width: 80px;
+    display: inline-block;
+}
+
+.editor-image-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.editor-image-row .editor-input {
+    flex: 1;
+}
+
+.btn-tools-upload {
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #aaa;
+    border: 1px solid #333;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.1s;
+    text-align: center;
+}
+
+.btn-tools-upload:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.editor-coords-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #888;
+    font-size: 0.85rem;
+}
+
+.editor-image-preview {
+    margin-top: 8px;
+    max-height: 120px;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.editor-image-preview img {
+    width: 100%;
+    display: block;
+    border-radius: 4px;
+}
+
+.editor-no-image {
+    color: #555;
+    font-size: 0.78rem;
+    font-style: italic;
+}
+
+.editor-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.editor-buttons .btn-tools-sm {
+    flex: 1;
+    text-align: center;
+    margin-top: 0;
+}
+
+/* Кнопка сохранить всё */
+
+.btn-tools-save {
+    width: 100%;
+    padding: 10px;
+    font-size: 0.9rem;
+    background: rgba(74, 222, 128, 0.1);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: bold;
+}
+
+.btn-tools-save:hover {
+    background: rgba(74, 222, 128, 0.2);
+}
+
+.editor-status {
+    margin-top: 8px;
+    font-size: 0.78rem;
+    min-height: 18px;
+}
+
+.editor-status-success { color: #4ade80; }
+.editor-status-error { color: #e94560; }
+.editor-status-warning { color: #ffd700; }

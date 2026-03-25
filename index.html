@@ -16,7 +16,9 @@
             <h1 class="title">Zelda GeoGuessr</h1>
             <p class="subtitle">The Legend of Zelda: Breath of the Wild</p>
             <div id="series-list" class="series-list"></div>
-            <button id="btn-calibration" class="btn-calibration">⚙ Режим калибровки</button>
+            <div class="menu-tools">
+                <button id="btn-tools" class="btn-tools">⚙ Инструменты</button>
+            </div>
         </div>
     </div>
 
@@ -66,71 +68,124 @@
         </div>
     </div>
 
-    <!-- ========== ЭКРАН КАЛИБРОВКИ ========== -->
-    <div id="screen-calibration" class="screen">
-        <div id="calibration-hud">
+    <!-- ========== ЭКРАН ИНСТРУМЕНТОВ ========== -->
+    <div id="screen-tools" class="screen">
+        <div id="tools-hud">
             <div class="hud-item">
-                <span style="color: #7ec8e3; font-weight: bold;">⚙ Режим калибровки</span>
+                <span style="color: #7ec8e3; font-weight: bold;">⚙ Инструменты</span>
             </div>
             <div class="hud-item">
-                Курсор: <span id="cal-cursor-coords">—</span>
+                Курсор: <span id="tools-cursor-coords">—</span>
             </div>
             <div class="hud-item">
-                <button id="btn-cal-back" class="btn-cal-control">← В меню</button>
+                <button id="btn-tools-back" class="btn-tools-control">← В меню</button>
             </div>
         </div>
 
-        <div id="calibration-map"></div>
+        <div id="tools-map"></div>
 
-        <div id="calibration-panel">
-            <div class="cal-section">
-                <h3>Точки</h3>
-                <div class="cal-point">
-                    <span class="cal-dot" style="background: #e94560;"></span>
-                    <span>Точка A:</span>
-                    <span id="cal-point-a" class="cal-coord">Кликните на карту</span>
+        <!-- Боковая панель с вкладками -->
+        <div id="tools-panel">
+            <div class="tools-tabs">
+                <button class="tools-tab active" data-tab="tab-calibration">📏 Калибровка</button>
+                <button class="tools-tab" data-tab="tab-editor">📝 Редактор</button>
+            </div>
+
+            <!-- === ВКЛАДКА: КАЛИБРОВКА === -->
+            <div id="tab-calibration" class="tools-tab-content active">
+                <div class="cal-section">
+                    <h3>Точки</h3>
+                    <div class="cal-point">
+                        <span class="cal-dot" style="background: #e94560;"></span>
+                        <span>Точка A:</span>
+                        <span id="cal-point-a" class="cal-coord">Кликните на карту</span>
+                    </div>
+                    <div class="cal-point">
+                        <span class="cal-dot" style="background: #4ade80;"></span>
+                        <span>Точка B:</span>
+                        <span id="cal-point-b" class="cal-coord">Кликните ещё раз</span>
+                    </div>
+                    <button id="btn-cal-clear" class="btn-tools-sm">Сбросить точки</button>
                 </div>
-                <div class="cal-point">
-                    <span class="cal-dot" style="background: #4ade80;"></span>
-                    <span>Точка B:</span>
-                    <span id="cal-point-b" class="cal-coord">Кликните ещё раз</span>
+
+                <div class="cal-section" id="cal-results" style="display: none;">
+                    <h3>Результат</h3>
+                    <div class="cal-result-row">
+                        <span>Расстояние:</span>
+                        <span id="cal-distance" class="cal-value">—</span>
+                        <span class="cal-unit">px</span>
+                    </div>
+                    <div class="cal-result-row">
+                        <span>Очки:</span>
+                        <span id="cal-score" class="cal-value cal-score-value">—</span>
+                        <span class="cal-unit">/ 5000</span>
+                    </div>
+                </div>
+
+                <div class="cal-section">
+                    <h3>Калибровка D</h3>
+                    <div class="cal-slider-row">
+                        <input type="range" id="cal-d-slider" min="200" max="5000" step="100" value="2000" />
+                        <input type="number" id="cal-d-input" min="100" max="10000" value="2000" />
+                    </div>
+                    <p class="cal-hint">
+                        Меньше D → строже оценка.<br>
+                        При D = <span id="cal-d-label">2000</span>: на расстоянии D очки ≈ 1840
+                    </p>
+                    <button id="btn-cal-apply" class="btn-tools-sm btn-tools-accent">Применить D к игре</button>
+                </div>
+
+                <div class="cal-section">
+                    <h3>Таблица очков</h3>
+                    <div id="cal-score-table" class="cal-score-table"></div>
                 </div>
             </div>
 
-            <div class="cal-section cal-results-section" id="cal-results" style="display: none;">
-                <h3>Результат</h3>
-                <div class="cal-result-row">
-                    <span>Расстояние:</span>
-                    <span id="cal-distance" class="cal-value">—</span>
-                    <span class="cal-unit">px</span>
+            <!-- === ВКЛАДКА: РЕДАКТОР === -->
+            <div id="tab-editor" class="tools-tab-content">
+                <div class="editor-section">
+                    <h3>Серии</h3>
+                    <div id="editor-series-list" class="editor-series-list"></div>
+                    <button id="btn-editor-add-series" class="btn-tools-sm btn-tools-accent">+ Новая серия</button>
                 </div>
-                <div class="cal-result-row">
-                    <span>Очки:</span>
-                    <span id="cal-score" class="cal-value cal-score-value">—</span>
-                    <span class="cal-unit">/ 5000</span>
+
+                <div class="editor-section" id="editor-rounds-section" style="display: none;">
+                    <h3>Раунды: <span id="editor-series-name">—</span></h3>
+                    <div id="editor-rounds-list" class="editor-rounds-list"></div>
+                    <button id="btn-editor-add-round" class="btn-tools-sm btn-tools-accent">+ Добавить раунд</button>
                 </div>
-            </div>
 
-            <div class="cal-section">
-                <h3>Калибровка D</h3>
-                <div class="cal-slider-row">
-                    <input type="range" id="cal-d-slider" min="200" max="5000" step="100" value="2000" />
-                    <input type="number" id="cal-d-input" min="100" max="10000" value="2000" />
+                <div class="editor-section" id="editor-round-edit" style="display: none;">
+                    <h3>Редактирование раунда</h3>
+                    <div class="editor-field">
+                        <label>Изображение:</label>
+                        <div class="editor-image-row">
+                            <input type="text" id="editor-round-image" class="editor-input" placeholder="filename.png" />
+                            <label class="btn-tools-sm btn-tools-upload" for="editor-upload-file">📁</label>
+                            <input type="file" id="editor-upload-file" accept="image/*" style="display: none;" />
+                        </div>
+                        <div id="editor-image-preview" class="editor-image-preview"></div>
+                    </div>
+                    <div class="editor-field">
+                        <label>Координаты (кликните на карту или введите):</label>
+                        <div class="editor-coords-row">
+                            <span>X:</span>
+                            <input type="number" id="editor-round-x" class="editor-input editor-input-sm" />
+                            <span>Y:</span>
+                            <input type="number" id="editor-round-y" class="editor-input editor-input-sm" />
+                        </div>
+                        <p class="cal-hint">Кликните на карту чтобы задать координаты</p>
+                    </div>
+                    <div class="editor-buttons">
+                        <button id="btn-editor-save-round" class="btn-tools-sm btn-tools-accent">💾 Сохранить раунд</button>
+                        <button id="btn-editor-cancel-round" class="btn-tools-sm">Отмена</button>
+                    </div>
                 </div>
-                <p class="cal-hint">
-                    Меньше D → строже оценка.<br>
-                    При D = <span id="cal-d-label">2000</span>: на расстоянии D очки ≈ 1840
-                </p>
-            </div>
 
-            <div class="cal-section">
-                <h3>Таблица очков</h3>
-                <div id="cal-score-table" class="cal-score-table"></div>
-            </div>
-
-            <div class="cal-buttons">
-                <button id="btn-cal-clear" class="btn-cal-control">Сбросить точки</button>
-                <button id="btn-cal-apply" class="btn-cal-control btn-cal-apply">Применить D к игре</button>
+                <div class="editor-section">
+                    <button id="btn-editor-save-all" class="btn-tools-save">💾 Сохранить всё на диск</button>
+                    <div id="editor-status" class="editor-status"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -142,7 +197,7 @@
     <script src="js/scoring.js"></script>
     <script src="js/map.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/calibration.js"></script>
+    <script src="js/tools.js"></script>
     <script src="js/game.js"></script>
 </body>
 </html>
