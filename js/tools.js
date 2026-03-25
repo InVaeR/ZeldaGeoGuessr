@@ -1,14 +1,9 @@
-/* ==========================================================
-   tools.js — Инструменты: калибровка + редактор серий
-   ========================================================== */
-
 const Tools = {
 
     map: null,
     activeTab: 'tab-calibration',
     eventsInitialized: false,
 
-    // === Калибровка ===
     cal: {
         pointA: null,
         pointB: null,
@@ -19,13 +14,12 @@ const Tools = {
         currentD: 2000
     },
 
-    // === Редактор ===
     editor: {
-        data: null,           // копия LOCATIONS_DATA
+        data: null,
         selectedSeries: -1,
         selectedRound: -1,
         editMarker: null,
-        mode: 'calibration'   // 'calibration' | 'editor-pick'
+        mode: 'calibration'
     },
 
     // ================================================
@@ -70,29 +64,31 @@ const Tools = {
 
     _initEvents() {
         if (this.eventsInitialized) {
-            // Только перепривязываем карту
             this.map.on('click', (e) => this._onMapClick(e));
             this.map.on('mousemove', (e) => this._onMouseMove(e));
+            this.map.on('mouseout', () => {
+                document.getElementById('tools-cursor-coords').textContent = '—';
+            });
             return;
         }
 
         const self = this;
 
-        // Карта
         this.map.on('click', (e) => self._onMapClick(e));
         this.map.on('mousemove', (e) => self._onMouseMove(e));
+        this.map.on('mouseout', () => {
+            document.getElementById('tools-cursor-coords').textContent = '—';
+        });
 
-        // Назад
         document.getElementById('btn-tools-back').addEventListener('click', () => self.close());
 
-        // Вкладки
         document.querySelectorAll('.tools-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 self._switchTab(tab.dataset.tab);
             });
         });
 
-        // === Калибровка ===
+        // Калибровка
         document.getElementById('btn-cal-clear').addEventListener('click', () => self._calClear());
         document.getElementById('btn-cal-apply').addEventListener('click', () => self._calApplyD());
 
@@ -114,13 +110,12 @@ const Tools = {
             self._calOnDChanged();
         });
 
-        // === Редактор ===
+        // Редактор
         document.getElementById('btn-editor-add-series').addEventListener('click', () => self._editorAddSeries());
         document.getElementById('btn-editor-add-round').addEventListener('click', () => self._editorAddRound());
         document.getElementById('btn-editor-save-round').addEventListener('click', () => self._editorSaveRound());
         document.getElementById('btn-editor-cancel-round').addEventListener('click', () => self._editorCancelRound());
         document.getElementById('btn-editor-save-all').addEventListener('click', () => self._editorSaveAll());
-
         document.getElementById('editor-upload-file').addEventListener('change', (e) => self._editorOnFileUpload(e));
 
         this.eventsInitialized = true;
@@ -139,7 +134,6 @@ const Tools = {
         document.querySelector(`.tools-tab[data-tab="${tabId}"]`).classList.add('active');
         document.getElementById(tabId).classList.add('active');
 
-        // Сбрасываем режим
         if (tabId === 'tab-calibration') {
             this.editor.mode = 'calibration';
         } else {
@@ -152,11 +146,18 @@ const Tools = {
     //  ОБЩЕЕ: КАРТА
     // ================================================
 
+    _formatCoords(px, py) {
+        const game = Scoring.pxToGame(px, py);
+        return `px(${px}, ${py})  game(${game.x.toFixed(0)}, ${game.y.toFixed(0)})`;
+    },
+
     _onMouseMove(e) {
         const px = GameMap.latLngToPx(e.latlng);
         const x = Math.round(px.x);
         const y = Math.round(px.y);
-        document.getElementById('tools-cursor-coords').textContent = `X: ${x}, Y: ${y}`;
+        const game = Scoring.pxToGame(x, y);
+        document.getElementById('tools-cursor-coords').textContent =
+            `px: ${x}, ${y}  |  game: ${game.x.toFixed(0)}, ${game.y.toFixed(0)}`;
     },
 
     _onMapClick(e) {
@@ -175,20 +176,25 @@ const Tools = {
         const px = GameMap.latLngToPx(e.latlng);
         const x = Math.round(px.x);
         const y = Math.round(px.y);
+        const game = Scoring.pxToGame(x, y);
         const c = this.cal;
+
+        const label = `px(${x}, ${y})\ngame(${game.x.toFixed(0)}, ${game.y.toFixed(0)})`;
 
         if (c.clickCount === 0) {
             this._calClearMarkers();
             c.pointA = { x, y };
-            c.markerA = GameMap.createGuessMarker(e.latlng).bindPopup(`A: (${x}, ${y})`).addTo(this.map);
-            document.getElementById('cal-point-a').textContent = `(${x}, ${y})`;
+            c.markerA = GameMap.createGuessMarker(e.latlng).bindPopup(`A: ${label}`).addTo(this.map);
+            document.getElementById('cal-point-a').innerHTML =
+                `(${x}, ${y}) <span class="cal-game-coord">game: ${game.x.toFixed(0)}, ${game.y.toFixed(0)}</span>`;
             document.getElementById('cal-point-b').textContent = 'Кликните ещё раз';
             document.getElementById('cal-results').style.display = 'none';
             c.clickCount = 1;
         } else if (c.clickCount === 1) {
             c.pointB = { x, y };
-            c.markerB = GameMap.createCorrectMarker(e.latlng).bindPopup(`B: (${x}, ${y})`).addTo(this.map);
-            document.getElementById('cal-point-b').textContent = `(${x}, ${y})`;
+            c.markerB = GameMap.createCorrectMarker(e.latlng).bindPopup(`B: ${label}`).addTo(this.map);
+            document.getElementById('cal-point-b').innerHTML =
+                `(${x}, ${y}) <span class="cal-game-coord">game: ${game.x.toFixed(0)}, ${game.y.toFixed(0)}</span>`;
 
             const latLngA = GameMap.pxToLatLng(c.pointA.x, c.pointA.y);
             c.line = GameMap.createResultLine(latLngA, e.latlng).addTo(this.map);
@@ -205,10 +211,12 @@ const Tools = {
         const c = this.cal;
         if (!c.pointA || !c.pointB) return;
 
-        const dist = Scoring.distance(c.pointA.x, c.pointA.y, c.pointB.x, c.pointB.y);
-        const score = Math.round(CONFIG.MAX_ROUND_SCORE * Math.exp(-dist / c.currentD));
+        const pxDist = Scoring.distance(c.pointA.x, c.pointA.y, c.pointB.x, c.pointB.y);
+        const meters = Scoring.pxDistanceToMeters(pxDist);
+        const score = Math.round(CONFIG.MAX_ROUND_SCORE * Math.exp(-pxDist / c.currentD));
 
-        document.getElementById('cal-distance').textContent = Math.round(dist);
+        document.getElementById('cal-distance').innerHTML =
+            `${Math.round(pxDist)} <span class="cal-game-coord">(${Scoring.formatDistance(meters)})</span>`;
         document.getElementById('cal-score').textContent = score;
         document.getElementById('cal-results').style.display = 'block';
     },
@@ -229,15 +237,15 @@ const Tools = {
     _calUpdateScoreTable() {
         const distances = [0, 100, 250, 500, 750, 1000, 1500, 2000, 3000, 5000, 10000];
         const d = this.cal.currentD;
-        let html = '<div class="cal-table-header"><span>Расст.</span><span>Очки</span><span></span></div>';
+        let html = '<div class="cal-table-header"><span>Расст. px</span><span>≈ метры</span><span>Очки</span></div>';
 
         distances.forEach(dist => {
             const score = Math.round(CONFIG.MAX_ROUND_SCORE * Math.exp(-dist / d));
-            const pct = (score / CONFIG.MAX_ROUND_SCORE * 100).toFixed(1);
+            const meters = Scoring.pxDistanceToMeters(dist);
             html += `<div class="cal-table-row">
                 <span>${dist.toLocaleString()}</span>
+                <span class="cal-table-meters">${Scoring.formatDistance(meters)}</span>
                 <span class="cal-table-score">${score.toLocaleString()}</span>
-                <span class="cal-table-pct">${pct}%</span>
             </div>`;
         });
 
@@ -289,7 +297,6 @@ const Tools = {
 
         list.innerHTML = html;
 
-        // Клик по серии — выбрать
         list.querySelectorAll('.editor-series-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.classList.contains('editor-series-del') ||
@@ -298,7 +305,6 @@ const Tools = {
             });
         });
 
-        // Изменение имени
         list.querySelectorAll('.editor-series-name-input').forEach(inp => {
             inp.addEventListener('change', (e) => {
                 const idx = parseInt(e.target.dataset.index);
@@ -306,7 +312,6 @@ const Tools = {
             });
         });
 
-        // Удаление серии
         list.querySelectorAll('.editor-series-del').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -368,10 +373,11 @@ const Tools = {
         let html = '';
 
         series.rounds.forEach((r, i) => {
+            const game = Scoring.pxToGame(r.x, r.y);
             html += `<div class="editor-round-item" data-index="${i}">
                 <span class="editor-round-num">${i + 1}.</span>
                 <span class="editor-round-info">${this._escHtml(r.image)}</span>
-                <span class="editor-round-xy">(${r.x}, ${r.y})</span>
+                <span class="editor-round-xy" title="game: ${game.x.toFixed(0)}, ${game.y.toFixed(0)}">(${r.x}, ${r.y})</span>
                 <button class="editor-round-edit-btn" data-index="${i}" title="Редактировать">✎</button>
                 <button class="editor-round-del" data-index="${i}" title="Удалить">✕</button>
             </div>`;
@@ -383,14 +389,12 @@ const Tools = {
 
         list.innerHTML = html;
 
-        // Редактировать раунд
         list.querySelectorAll('.editor-round-edit-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._editorEditRound(parseInt(btn.dataset.index));
             });
         });
 
-        // Удалить раунд
         list.querySelectorAll('.editor-round-del').forEach(btn => {
             btn.addEventListener('click', () => {
                 const ri = parseInt(btn.dataset.index);
@@ -426,16 +430,14 @@ const Tools = {
         this.editor.mode = 'editor-pick';
 
         const round = this.editor.data.series[idx].rounds[roundIndex];
+        const game = Scoring.pxToGame(round.x, round.y);
 
         document.getElementById('editor-round-edit').style.display = 'block';
         document.getElementById('editor-round-image').value = round.image;
         document.getElementById('editor-round-x').value = round.x;
         document.getElementById('editor-round-y').value = round.y;
 
-        // Превью
         this._editorUpdatePreview(round.image);
-
-        // Маркер на карте
         this._editorPlaceMarker(round.x, round.y);
     },
 
@@ -461,7 +463,7 @@ const Tools = {
         this._editorRenderRounds();
     },
 
-        _editorCancelRound() {
+    _editorCancelRound() {
         document.getElementById('editor-round-edit').style.display = 'none';
         this.editor.selectedRound = -1;
         this.editor.mode = 'calibration';
@@ -473,7 +475,7 @@ const Tools = {
     },
 
     // ================================================
-    //  РЕДАКТОР: КЛИК ПО КАРТЕ (выбор координат)
+    //  РЕДАКТОР: КЛИК ПО КАРТЕ
     // ================================================
 
     _editorOnMapClick(e) {
@@ -495,8 +497,9 @@ const Tools = {
         }
 
         const latlng = GameMap.pxToLatLng(x, y);
+        const game = Scoring.pxToGame(x, y);
         this.editor.editMarker = GameMap.createCorrectMarker(latlng)
-            .bindPopup(`(${x}, ${y})`)
+            .bindPopup(`px(${x}, ${y})<br>game(${game.x.toFixed(0)}, ${game.y.toFixed(0)})`)
             .addTo(this.map);
     },
 
@@ -520,7 +523,6 @@ const Tools = {
 
         const filename = document.getElementById('editor-round-image').value || file.name;
 
-        // Если есть сервер — загружаем через API
         if (window.location.protocol !== 'file:') {
             const formData = new FormData();
             formData.append('image', file);
@@ -542,7 +544,6 @@ const Tools = {
                 this._editorShowStatus('✕ Ошибка загрузки: ' + err.message, 'error');
             });
         } else {
-            // Без сервера — просто показываем превью
             const reader = new FileReader();
             reader.onload = (ev) => {
                 document.getElementById('editor-image-preview').innerHTML =
@@ -552,19 +553,17 @@ const Tools = {
             this._editorShowStatus('⚠ Файл нужно вручную скопировать в locs/', 'warning');
         }
 
-        // Сбрасываем input чтобы можно было загрузить тот же файл повторно
         e.target.value = '';
     },
 
     // ================================================
-    //  РЕДАКТОР: СОХРАНЕНИЕ НА ДИСК
+    //  РЕДАКТОР: СОХРАНЕНИЕ
     // ================================================
 
     _editorSaveAll() {
         const data = this.editor.data;
 
         if (window.location.protocol === 'file:') {
-            // Без сервера — показываем JSON для ручного копирования
             const json = JSON.stringify(data, null, 4);
             const blob = new Blob([`const LOCATIONS_DATA = ${json};\n`], { type: 'text/javascript' });
             const url = URL.createObjectURL(blob);
@@ -573,11 +572,10 @@ const Tools = {
             a.download = 'locations_data.js';
             a.click();
             URL.revokeObjectURL(url);
-            this._editorShowStatus('✓ Файл скачан. Замените locations_data.js вручную.', 'warning');
+            this._editorShowStatus('✓ Файл скачан. Замените locations_data.js', 'warning');
             return;
         }
 
-        // Через сервер
         fetch('/api/series/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -588,12 +586,11 @@ const Tools = {
             return r.json();
         })
         .then(result => {
-            // Обновляем глобальные данные
             Object.assign(LOCATIONS_DATA, JSON.parse(JSON.stringify(data)));
             this._editorShowStatus(`✓ Сохранено! Бэкап: ${result.backup}`, 'success');
         })
         .catch(err => {
-            this._editorShowStatus('✕ Ошибка сохранения: ' + err.message, 'error');
+            this._editorShowStatus('✕ Ошибка: ' + err.message, 'error');
         });
     },
 

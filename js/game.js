@@ -23,7 +23,6 @@
         UI.els.btnToggleImage.addEventListener('click', () => UI.toggleImage());
         UI.els.locationImage.addEventListener('click', () => UI.openImageFullscreen());
 
-        // Инструменты (было Calibration.open — теперь Tools.open)
         document.getElementById('btn-tools').addEventListener('click', () => Tools.open());
 
         UI.createImageOverlay();
@@ -85,6 +84,7 @@
 
         const distance = Scoring.distance(guessPx.x, guessPx.y, round.x, round.y);
         const score = Scoring.score(distance);
+        const meters = Scoring.pxDistanceToMeters(distance);
 
         totalScore += score;
 
@@ -95,6 +95,7 @@
             correctX: round.x,
             correctY: round.y,
             distance: Math.round(distance),
+            meters: meters,
             score: score
         });
 
@@ -104,8 +105,10 @@
 
     function showRoundResult(round, guessPx, distance, score) {
         const isLastRound = roundIndex >= currentSeries.rounds.length - 1;
+        const meters = Scoring.pxDistanceToMeters(distance);
+        const distText = `${Math.round(distance)} px (${Scoring.formatDistance(meters)})`;
 
-        UI.showRoundResult(distance, score, totalScore, isLastRound);
+        UI.showRoundResult(distText, score, totalScore, isLastRound);
         UI.showScreen('roundResult');
 
         if (resultMap) {
@@ -160,7 +163,6 @@
         if (gameMap) { gameMap.remove(); gameMap = null; }
         if (resultMap) { resultMap.remove(); resultMap = null; }
 
-        // Обновляем список серий (мог измениться в редакторе)
         UI.renderSeriesList(LOCATIONS_DATA.series, startGame);
         UI.showScreen('menu');
     }

@@ -107,8 +107,8 @@ const UI = {
     //  РЕЗУЛЬТАТЫ
     // ========================
 
-    showRoundResult(distance, roundScore, totalScore, isLastRound) {
-        this.els.resultDistance.textContent = Math.round(distance);
+    showRoundResult(distanceText, roundScore, totalScore, isLastRound) {
+        this.els.resultDistance.innerHTML = distanceText;
         this.els.resultRoundScore.textContent = roundScore;
         this.els.resultTotalScore.textContent = totalScore;
         this.els.btnNextRound.textContent = isLastRound ? 'Результаты' : 'Следующий раунд';
@@ -117,10 +117,11 @@ const UI = {
     showFinalResults(roundResults, totalScore) {
         let html = '';
         roundResults.forEach((r) => {
+            const distText = Scoring.formatDistance(r.meters);
             html += `
                 <div class="final-round-row">
                     <span class="round-label">Раунд ${r.roundNum}</span>
-                    <span class="round-distance">${r.distance} px</span>
+                    <span class="round-distance">${distText}</span>
                     <span class="round-score">${r.score}</span>
                 </div>
             `;

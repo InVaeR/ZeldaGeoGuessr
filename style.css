@@ -1052,3 +1052,17 @@ body {
 .editor-status-success { color: #4ade80; }
 .editor-status-error { color: #e94560; }
 .editor-status-warning { color: #ffd700; }
+
+/* Игровые координаты (мелкий шрифт рядом с пиксельными) */
+.cal-game-coord {
+    color: #4ade80;
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+.cal-table-meters {
+    color: #4ade80;
+    font-size: 0.72rem;
+    min-width: 55px;
+    text-align: center;
+}
