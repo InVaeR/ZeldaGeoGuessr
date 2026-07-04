@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
+
+var safeFilenameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // ========================
 //  ЧТЕНИЕ СЕРИЙ
@@ -27,17 +32,21 @@ func handleSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 		return
 	}
 
-	// Извлекаем JSON из JS файла
 	content := string(data)
-	// Ищем начало объекта
 	startIdx := strings.Index(content, "{")
-	if startIdx == -1 {
+	endIdx := strings.LastIndex(content, "}")
+	if startIdx == -1 || endIdx == -1 || endIdx <= startIdx {
 		http.Error(w, "Неверный формат locations_data.js", http.StatusInternalServerError)
 		return
 	}
-	// Убираем "const LOCATIONS_DATA = " и завершающий ";"
-	jsonStr := content[startIdx:]
-	jsonStr = strings.TrimRight(jsonStr, "; \n\r\t")
+	jsonStr := content[startIdx : endIdx+1]
+
+	// Проверяем что это валидный JSON
+	var check interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &check); err != nil {
+		http.Error(w, "Не удалось распарсить данные", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(jsonStr))
@@ -53,7 +62,7 @@ func handleSaveSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 		return
 	}
 
-	// Читаем тело запроса
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONSize)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Ошибка чтения запроса", http.StatusBadRequest)
@@ -68,28 +77,27 @@ func handleSaveSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 		return
 	}
 
-	// Форматируем JSON красиво
 	prettyJSON, err := json.MarshalIndent(checkData, "    ", "    ")
 	if err != nil {
 		http.Error(w, "Ошибка форматирования", http.StatusInternalServerError)
 		return
 	}
 
-	// Формируем JS файл
 	jsContent := fmt.Sprintf("const LOCATIONS_DATA = %s;\n", string(prettyJSON))
 
-	// Создаём бэкап
 	dataPath := filepath.Join(webRoot, "locations_data.js")
-	backupPath := filepath.Join(webRoot, fmt.Sprintf("locations_data.backup_%s.js",
-		time.Now().Format("20060102_150405")))
+	backupName := fmt.Sprintf("locations_data.backup_%s.js", time.Now().Format("20060102_150405"))
+	backupPath := filepath.Join(webRoot, backupsDir, backupName)
 
 	if fileExists(dataPath) {
-		copyFile(dataPath, backupPath)
+		if err := copyFile(dataPath, backupPath); err != nil {
+			fmt.Printf("⚠ Не удалось создать бэкап: %v\n", err)
+		}
 	}
 
-	// Записываем новый файл
-	err = os.WriteFile(dataPath, []byte(jsContent), 0644)
-	if err != nil {
+	cleanOldBackups(webRoot, 20)
+
+	if err := os.WriteFile(dataPath, []byte(jsContent), 0644); err != nil {
 		http.Error(w, "Ошибка записи файла", http.StatusInternalServerError)
 		return
 	}
@@ -98,7 +106,7 @@ func handleSaveSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"message": "Данные сохранены",
-		"backup":  filepath.Base(backupPath),
+		"backup":  backupName,
 	})
 }
 
@@ -112,8 +120,11 @@ func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string
 		return
 	}
 
-	// Максимум 20 МБ
-	r.ParseMultipartForm(20 << 20)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize+1<<20)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		http.Error(w, "Файл слишком большой или повреждён", http.StatusBadRequest)
+		return
+	}
 
 	file, header, err := r.FormFile("image")
 	if err != nil {
@@ -127,20 +138,46 @@ func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string
 	if filename == "" {
 		filename = header.Filename
 	}
+	// Берём только базовое имя — на всякий случай
+	filename = filepath.Base(filename)
 
-	// Проверяем расширение
+	if !safeFilenameRe.MatchString(filename) {
+		http.Error(w, "Недопустимое имя файла (разрешены A-Z, 0-9, '.', '_', '-')", http.StatusBadRequest)
+		return
+	}
+
 	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".webp" {
 		http.Error(w, "Допустимые форматы: PNG, JPG, WebP", http.StatusBadRequest)
 		return
 	}
 
+	// Проверка содержимого: первые 512 байт
+	buf := make([]byte, 512)
+	n, _ := file.Read(buf)
+	contentType := http.DetectContentType(buf[:n])
+	if !strings.HasPrefix(contentType, "image/") {
+		http.Error(w, "Файл не является изображением", http.StatusBadRequest)
+		return
+	}
+	src := io.MultiReader(bytes.NewReader(buf[:n]), file)
+
 	// Создаём папку locs если нет
 	locsDir := filepath.Join(webRoot, "locs")
-	os.MkdirAll(locsDir, 0755)
+	if err := os.MkdirAll(locsDir, 0755); err != nil {
+		http.Error(w, "Ошибка создания папки locs", http.StatusInternalServerError)
+		return
+	}
 
-	// Сохраняем файл
 	destPath := filepath.Join(locsDir, filename)
+	// Дополнительная проверка: путь должен оставаться внутри locsDir
+	absLocs, _ := filepath.Abs(locsDir)
+	absDest, _ := filepath.Abs(destPath)
+	if !strings.HasPrefix(absDest, absLocs) {
+		http.Error(w, "Недопустимый путь", http.StatusBadRequest)
+		return
+	}
+
 	dst, err := os.Create(destPath)
 	if err != nil {
 		http.Error(w, "Ошибка создания файла", http.StatusInternalServerError)
@@ -148,8 +185,7 @@ func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string
 	}
 	defer dst.Close()
 
-	_, err = io.Copy(dst, file)
-	if err != nil {
+	if _, err := io.Copy(dst, src); err != nil {
 		http.Error(w, "Ошибка записи файла", http.StatusInternalServerError)
 		return
 	}
@@ -171,6 +207,8 @@ func handleDeleteLocationImage(w http.ResponseWriter, r *http.Request, webRoot s
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	var req struct {
 		Filename string `json:"filename"`
 	}
@@ -180,22 +218,28 @@ func handleDeleteLocationImage(w http.ResponseWriter, r *http.Request, webRoot s
 		return
 	}
 
-	// Защита от path traversal
-	if strings.Contains(req.Filename, "..") || strings.Contains(req.Filename, "/") ||
-		strings.Contains(req.Filename, "\\") {
+	req.Filename = filepath.Base(req.Filename)
+	if !safeFilenameRe.MatchString(req.Filename) {
 		http.Error(w, "Недопустимое имя файла", http.StatusBadRequest)
 		return
 	}
 
-	filePath := filepath.Join(webRoot, "locs", req.Filename)
+	locsDir := filepath.Join(webRoot, "locs")
+	filePath := filepath.Join(locsDir, req.Filename)
+
+	absLocs, _ := filepath.Abs(locsDir)
+	absFile, _ := filepath.Abs(filePath)
+	if !strings.HasPrefix(absFile, absLocs) {
+		http.Error(w, "Недопустимый путь", http.StatusBadRequest)
+		return
+	}
 
 	if !fileExists(filePath) {
 		http.Error(w, "Файл не найден", http.StatusNotFound)
 		return
 	}
 
-	err := os.Remove(filePath)
-	if err != nil {
+	if err := os.Remove(filePath); err != nil {
 		http.Error(w, "Ошибка удаления файла", http.StatusInternalServerError)
 		return
 	}
@@ -212,6 +256,9 @@ func handleDeleteLocationImage(w http.ResponseWriter, r *http.Request, webRoot s
 // ========================
 
 func copyFile(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
@@ -226,4 +273,26 @@ func copyFile(src, dst string) error {
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err
+}
+
+func cleanOldBackups(webRoot string, keep int) {
+	backupsPath := filepath.Join(webRoot, backupsDir)
+	entries, err := os.ReadDir(backupsPath)
+	if err != nil {
+		return
+	}
+
+	var backupFiles []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), "locations_data.backup_") {
+			backupFiles = append(backupFiles, filepath.Join(backupsPath, e.Name()))
+		}
+	}
+
+	sort.Strings(backupFiles)
+	if len(backupFiles) > keep {
+		for _, f := range backupFiles[:len(backupFiles)-keep] {
+			os.Remove(f)
+		}
+	}
 }

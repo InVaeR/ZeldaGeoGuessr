@@ -20,3 +20,6 @@ Thumbs.db
 
 # Логи
 *.log
+backups/
+audit.md
+AGENTS.md

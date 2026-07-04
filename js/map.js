@@ -1,6 +1,6 @@
-/* ==========================================================
-   map.js — Работа с Leaflet картой
-   ========================================================== */
+// ============================================================================
+// map.js — Работа с Leaflet картой
+// ============================================================================
 
 const GameMap = {
 
@@ -44,7 +44,23 @@ const GameMap = {
         }
 
         map.fitBounds(bounds);
+
+        // Дополнительно — пересчёт размеров после раскладки
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => map.invalidateSize());
+        });
+
         return map;
+    },
+
+    /**
+     * Безопасно пересоздать карту, удалив старую.
+     */
+    recreate(containerId, prevMap) {
+        if (prevMap) {
+            try { prevMap.remove(); } catch (_) {}
+        }
+        return this.create(containerId);
     },
 
     // ========================
@@ -52,15 +68,13 @@ const GameMap = {
     // ========================
 
     _addTileLayer(map) {
-        // Используем L.TileLayer с кастомным URL
-        // Leaflet в CRS.Simple запрашивает тайлы по координатам {x}, {y}, {z}
-        // Наши файлы: map_tiles/{z}/{x}_{y}.jpg
-
-        L.TileLayer.CustomSimple = L.TileLayer.extend({
-            getTileUrl: function (coords) {
-                return `${CONFIG.TILES_PATH}/${coords.z}/${coords.x}_${coords.y}.jpg`;
-            }
-        });
+        if (!L.TileLayer.CustomSimple) {
+            L.TileLayer.CustomSimple = L.TileLayer.extend({
+                getTileUrl(coords) {
+                    return `${CONFIG.TILES_PATH}/${coords.z}/${coords.x}_${coords.y}.jpg`;
+                }
+            });
+        }
 
         new L.TileLayer.CustomSimple('', {
             tileSize: CONFIG.TILE_SIZE,
@@ -83,38 +97,29 @@ const GameMap = {
     //  МАРКЕРЫ
     // ========================
 
-    createGuessMarker(latlng) {
+    /**
+     * @param {L.LatLng} latlng
+     * @param {{ variant?: 'guess'|'correct', size?: number }} [opts]
+     */
+    createMarker(latlng, opts = {}) {
+        const variant = opts.variant || 'guess';
+        const size = opts.size || 20;
         return L.marker(latlng, {
             icon: L.divIcon({
-                className: 'guess-icon',
-                html: `<div style="
-                    width: 20px; height: 20px;
-                    background: #e94560;
-                    border: 3px solid white;
-                    border-radius: 50%;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-                "></div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
+                className: `map-marker map-marker--${variant}`,
+                html: '<span class="map-marker__dot"></span>',
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2]
             })
         });
     },
 
+    createGuessMarker(latlng) {
+        return this.createMarker(latlng, { variant: 'guess' });
+    },
+
     createCorrectMarker(latlng) {
-        return L.marker(latlng, {
-            icon: L.divIcon({
-                className: 'guess-icon',
-                html: `<div style="
-                    width: 20px; height: 20px;
-                    background: #4ade80;
-                    border: 3px solid white;
-                    border-radius: 50%;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-                "></div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            })
-        });
+        return this.createMarker(latlng, { variant: 'correct' });
     },
 
     createResultLine(from, to) {

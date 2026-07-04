@@ -1,39 +1,12 @@
-/* ==========================================================
-   ui.js — Управление экранами и DOM-элементами
-   ========================================================== */
+// ============================================================================
+// ui.js — Управление экранами и DOM-элементами
+// ============================================================================
 
 const UI = {
 
-    screens: {
-        menu: document.getElementById('screen-menu'),
-        game: document.getElementById('screen-game'),
-        roundResult: document.getElementById('screen-round-result'),
-        final: document.getElementById('screen-final'),
-        tools: document.getElementById('screen-tools')
-    },
-
-    els: {
-        seriesList: document.getElementById('series-list'),
-        hudSeriesName: document.getElementById('hud-series-name'),
-        hudRound: document.getElementById('hud-round'),
-        hudTotal: document.getElementById('hud-total'),
-        hudScore: document.getElementById('hud-score'),
-        locationImage: document.getElementById('location-image'),
-        locationPanel: document.getElementById('location-panel'),
-        btnToggleImage: document.getElementById('btn-toggle-image'),
-        btnConfirm: document.getElementById('btn-confirm'),
-        resultDistance: document.getElementById('result-distance'),
-        resultRoundScore: document.getElementById('result-round-score'),
-        resultTotalScore: document.getElementById('result-total-score'),
-        btnNextRound: document.getElementById('btn-next-round'),
-        finalSummary: document.getElementById('final-summary'),
-        finalScore: document.getElementById('final-score'),
-        btnBackMenu: document.getElementById('btn-back-menu')
-    },
-
-    // ========================
-    //  VIEWER STATE
-    // ========================
+    screens: null,
+    els: null,
+    _initialized: false,
 
     viewer: {
         zoom: 1,
@@ -49,7 +22,46 @@ const UI = {
         imgWidth: 0,
         imgHeight: 0,
         lastMouseX: -1,
-        lastMouseY: -1
+        lastMouseY: -1,
+        _escHandler: null
+    },
+
+    // ========================
+    //  ИНИЦИАЛИЗАЦИЯ
+    // ========================
+
+    init() {
+        if (this._initialized) return;
+
+        this.screens = {
+            menu: document.getElementById('screen-menu'),
+            game: document.getElementById('screen-game'),
+            roundResult: document.getElementById('screen-round-result'),
+            final: document.getElementById('screen-final'),
+            tools: document.getElementById('screen-tools')
+        };
+
+        this.els = {
+            seriesList: document.getElementById('series-list'),
+            hudSeriesName: document.getElementById('hud-series-name'),
+            hudRound: document.getElementById('hud-round'),
+            hudTotal: document.getElementById('hud-total'),
+            hudScore: document.getElementById('hud-score'),
+            locationImage: document.getElementById('location-image'),
+            locationPanel: document.getElementById('location-panel'),
+            btnToggleImage: document.getElementById('btn-toggle-image'),
+            btnConfirm: document.getElementById('btn-confirm'),
+            resultDistance: document.getElementById('result-distance'),
+            resultRoundScore: document.getElementById('result-round-score'),
+            resultTotalScore: document.getElementById('result-total-score'),
+            btnNextRound: document.getElementById('btn-next-round'),
+            finalSummary: document.getElementById('final-summary'),
+            finalScore: document.getElementById('final-score'),
+            btnBackMenu: document.getElementById('btn-back-menu')
+        };
+
+        this.createImageOverlay();
+        this._initialized = true;
     },
 
     // ========================
@@ -95,10 +107,6 @@ const UI = {
         }
     },
 
-    // ========================
-    //  КНОПКА ПОДТВЕРЖДЕНИЯ
-    // ========================
-
     setConfirmEnabled(enabled) {
         this.els.btnConfirm.disabled = !enabled;
     },
@@ -108,25 +116,37 @@ const UI = {
     // ========================
 
     showRoundResult(distanceText, roundScore, totalScore, isLastRound) {
-        this.els.resultDistance.innerHTML = distanceText;
+        // distanceText формируется в game.js из безопасных численных значений
+        this.els.resultDistance.textContent = distanceText;
         this.els.resultRoundScore.textContent = roundScore;
         this.els.resultTotalScore.textContent = totalScore;
         this.els.btnNextRound.textContent = isLastRound ? 'Результаты' : 'Следующий раунд';
     },
 
     showFinalResults(roundResults, totalScore) {
-        let html = '';
+        const frag = document.createDocumentFragment();
         roundResults.forEach((r) => {
-            const distText = Scoring.formatDistance(r.meters);
-            html += `
-                <div class="final-round-row">
-                    <span class="round-label">Раунд ${r.roundNum}</span>
-                    <span class="round-distance">${distText}</span>
-                    <span class="round-score">${r.score}</span>
-                </div>
-            `;
+            const row = document.createElement('div');
+            row.className = 'final-round-row';
+
+            const label = document.createElement('span');
+            label.className = 'round-label';
+            label.textContent = `Раунд ${r.roundNum}`;
+
+            const dist = document.createElement('span');
+            dist.className = 'round-distance';
+            dist.textContent = Scoring.formatDistance(r.meters);
+
+            const score = document.createElement('span');
+            score.className = 'round-score';
+            score.textContent = r.score;
+
+            row.append(label, dist, score);
+            frag.appendChild(row);
         });
-        this.els.finalSummary.innerHTML = html;
+
+        this.els.finalSummary.innerHTML = '';
+        this.els.finalSummary.appendChild(frag);
         this.els.finalScore.textContent = totalScore;
     },
 
@@ -150,6 +170,8 @@ const UI = {
     // ========================
 
     createImageOverlay() {
+        if (document.getElementById('image-overlay')) return;
+
         const overlay = document.createElement('div');
         overlay.id = 'image-overlay';
         overlay.innerHTML = `
@@ -176,7 +198,6 @@ const UI = {
         const self = this;
         const container = document.getElementById('viewer-container');
 
-        // Отслеживаем позицию мыши внутри контейнера
         container.addEventListener('mousemove', (e) => {
             const rect = container.getBoundingClientRect();
             self.viewer.lastMouseX = e.clientX - rect.left;
@@ -188,18 +209,11 @@ const UI = {
             self.viewer.lastMouseY = -1;
         });
 
-        // Кнопки
         document.getElementById('viewer-close').addEventListener('click', () => self.closeViewer());
         document.getElementById('viewer-zoom-in').addEventListener('click', () => self._viewerZoomToPoint(1.5));
         document.getElementById('viewer-zoom-out').addEventListener('click', () => self._viewerZoomToPoint(1 / 1.5));
         document.getElementById('viewer-reset').addEventListener('click', () => self._viewerFit());
 
-        // Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') self.closeViewer();
-        });
-
-        // Колёсико — зум к курсору
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
             const rect = container.getBoundingClientRect();
@@ -209,7 +223,6 @@ const UI = {
             self._viewerZoomAt(factor, mx, my);
         }, { passive: false });
 
-        // Перетаскивание
         container.addEventListener('mousedown', (e) => {
             e.preventDefault();
             self.viewer.isDragging = true;
@@ -220,21 +233,20 @@ const UI = {
             container.classList.add('dragging');
         });
 
-        window.addEventListener('mousemove', (e) => {
+        self.viewer._onMove = (e) => {
             if (!self.viewer.isDragging) return;
             self.viewer.panX = self.viewer.panStartX + (e.clientX - self.viewer.dragStartX);
             self.viewer.panY = self.viewer.panStartY + (e.clientY - self.viewer.dragStartY);
             self._viewerApply();
-        });
+        };
 
-        window.addEventListener('mouseup', () => {
+        self.viewer._onUp = () => {
             if (self.viewer.isDragging) {
                 self.viewer.isDragging = false;
                 document.getElementById('viewer-container').classList.remove('dragging');
             }
-        });
+        };
 
-        // Двойной клик — сброс
         container.addEventListener('dblclick', () => self._viewerFit());
     },
 
@@ -246,15 +258,21 @@ const UI = {
         img.src = this.els.locationImage.src;
         overlay.classList.add('active');
 
+        window.addEventListener('mousemove', this.viewer._onMove);
+        window.addEventListener('mouseup', this.viewer._onUp);
+
+        if (!this.viewer._escHandler) {
+            this.viewer._escHandler = (e) => {
+                if (e.key === 'Escape') self.closeViewer();
+            };
+            document.addEventListener('keydown', this.viewer._escHandler);
+        }
+
         const doFit = () => {
             self.viewer.imgWidth = img.naturalWidth;
             self.viewer.imgHeight = img.naturalHeight;
-
-            // Ждём пока контейнер получит размеры после display:flex
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    self._viewerFit();
-                });
+                requestAnimationFrame(() => self._viewerFit());
             });
         };
 
@@ -267,11 +285,16 @@ const UI = {
 
     closeViewer() {
         document.getElementById('image-overlay').classList.remove('active');
+
+        window.removeEventListener('mousemove', this.viewer._onMove);
+        window.removeEventListener('mouseup', this.viewer._onUp);
+
+        if (this.viewer._escHandler) {
+            document.removeEventListener('keydown', this.viewer._escHandler);
+            this.viewer._escHandler = null;
+        }
     },
 
-    /**
-     * Вписать изображение по центру контейнера
-     */
     _viewerFit() {
         const container = document.getElementById('viewer-container');
         const cw = container.clientWidth;
@@ -298,9 +321,6 @@ const UI = {
         this._viewerApply();
     },
 
-    /**
-     * Зум кнопками — к курсору если он внутри, иначе к центру
-     */
     _viewerZoomToPoint(factor) {
         const container = document.getElementById('viewer-container');
         const cw = container.clientWidth;
@@ -319,14 +339,10 @@ const UI = {
         this._viewerZoomAt(factor, px, py);
     },
 
-    /**
-     * Зум к точке (px, py) в координатах контейнера
-     */
     _viewerZoomAt(factor, px, py) {
         const v = this.viewer;
         const oldZoom = v.zoom;
         const newZoom = Math.max(v.minZoom, Math.min(v.maxZoom, oldZoom * factor));
-
         if (newZoom === oldZoom) return;
 
         const imgX = (px - v.panX) / oldZoom;
@@ -339,9 +355,6 @@ const UI = {
         this._viewerApply();
     },
 
-    /**
-     * Применить текущие pan/zoom к DOM
-     */
     _viewerApply() {
         const img = document.getElementById('viewer-image');
         const label = document.getElementById('viewer-zoom-level');
@@ -351,5 +364,15 @@ const UI = {
         img.style.transform = `translate(${v.panX}px, ${v.panY}px) scale(${v.zoom})`;
 
         label.textContent = `${Math.round(v.zoom * 100)}%`;
+    },
+
+    // ========================
+    //  УТИЛИТЫ
+    // ========================
+
+    escHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
     }
 };

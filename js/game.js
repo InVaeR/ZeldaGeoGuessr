@@ -1,172 +1,162 @@
-/* ==========================================================
-   game.js — Основная логика игры
-   ========================================================== */
+// ============================================================================
+// game.js — Основная логика игры
+// ============================================================================
 
 (function () {
     'use strict';
 
-    let currentSeries = null;
-    let roundIndex = 0;
-    let totalScore = 0;
-    let roundResults = [];
+    const Game = {
+        currentSeries: null,
+        roundIndex: 0,
+        totalScore: 0,
+        roundResults: [],
 
-    let gameMap = null;
-    let resultMap = null;
-    let guessMarker = null;
+        gameMap: null,
+        resultMap: null,
+        guessMarker: null,
 
-    function init() {
-        UI.renderSeriesList(LOCATIONS_DATA.series, startGame);
+        async _detectServer() {
+            try {
+                const r = await fetch('/api/health', { signal: AbortSignal.timeout(2000) });
+                if (r.ok) CONFIG.IS_SERVER = true;
+            } catch (_) {}
+        },
 
-        UI.els.btnConfirm.addEventListener('click', onConfirm);
-        UI.els.btnNextRound.addEventListener('click', onNextRound);
-        UI.els.btnBackMenu.addEventListener('click', onBackToMenu);
-        UI.els.btnToggleImage.addEventListener('click', () => UI.toggleImage());
-        UI.els.locationImage.addEventListener('click', () => UI.openImageFullscreen());
+        init() {
+            UI.init();
+            this._detectServer();
+            this.rerenderMenu();
 
-        document.getElementById('btn-tools').addEventListener('click', () => Tools.open());
+            UI.els.btnConfirm.addEventListener('click', () => this.onConfirm());
+            UI.els.btnNextRound.addEventListener('click', () => this.onNextRound());
+            UI.els.btnBackMenu.addEventListener('click', () => this.onBackToMenu());
+            UI.els.btnToggleImage.addEventListener('click', () => UI.toggleImage());
+            UI.els.locationImage.addEventListener('click', () => UI.openImageFullscreen());
 
-        UI.createImageOverlay();
-        UI.showScreen('menu');
-    }
+            document.getElementById('btn-tools').addEventListener('click', () => Tools.open());
 
-    function startGame(seriesIndex) {
-        currentSeries = LOCATIONS_DATA.series[seriesIndex];
-        roundIndex = 0;
-        totalScore = 0;
-        roundResults = [];
+            UI.showScreen('menu');
+        },
 
-        UI.updateHUD(currentSeries.name, 1, currentSeries.rounds.length, 0);
-        UI.showScreen('game');
+        startGame(seriesIndex) {
+            this.currentSeries = LOCATIONS_DATA.series[seriesIndex];
+            this.roundIndex = 0;
+            this.totalScore = 0;
+            this.roundResults = [];
 
-        if (gameMap) {
-            gameMap.remove();
-            gameMap = null;
-        }
+            UI.updateHUD(this.currentSeries.name, 1, this.currentSeries.rounds.length, 0);
+            UI.showScreen('game');
 
-        setTimeout(() => {
-            gameMap = GameMap.create('map');
-            startRound();
-        }, 100);
-    }
+            this.gameMap = GameMap.recreate('map', this.gameMap);
+            this.startRound();
+        },
 
-    function startRound() {
-        const round = currentSeries.rounds[roundIndex];
+        startRound() {
+            const round = this.currentSeries.rounds[this.roundIndex];
 
-        UI.updateHUD(currentSeries.name, roundIndex + 1, currentSeries.rounds.length, totalScore);
-        UI.showLocationImage(round.image);
-        UI.setConfirmEnabled(false);
+            UI.updateHUD(
+                this.currentSeries.name,
+                this.roundIndex + 1,
+                this.currentSeries.rounds.length,
+                this.totalScore
+            );
+            UI.showLocationImage(round.image);
+            UI.setConfirmEnabled(false);
 
-        if (guessMarker) {
-            gameMap.removeLayer(guessMarker);
-            guessMarker = null;
-        }
+            if (this.guessMarker) {
+                this.gameMap.removeLayer(this.guessMarker);
+                this.guessMarker = null;
+            }
 
-        GameMap.resetView(gameMap);
+            GameMap.resetView(this.gameMap);
 
-        gameMap.off('click');
-        gameMap.on('click', onMapClick);
-    }
+            this.gameMap.off('click');
+            this.gameMap.on('click', (e) => this.onMapClick(e));
+        },
 
-    function onMapClick(e) {
-        if (guessMarker) {
-            gameMap.removeLayer(guessMarker);
-        }
+        onMapClick(e) {
+            if (this.guessMarker) {
+                this.gameMap.removeLayer(this.guessMarker);
+            }
+            this.guessMarker = GameMap.createGuessMarker(e.latlng).addTo(this.gameMap);
+            UI.setConfirmEnabled(true);
+        },
 
-        guessMarker = GameMap.createGuessMarker(e.latlng).addTo(gameMap);
-        UI.setConfirmEnabled(true);
-    }
+        onConfirm() {
+            if (!this.guessMarker) return;
 
-    function onConfirm() {
-        if (!guessMarker) return;
+            const round = this.currentSeries.rounds[this.roundIndex];
+            const guessPx = GameMap.latLngToPx(this.guessMarker.getLatLng());
 
-        const round = currentSeries.rounds[roundIndex];
-        const guessPx = GameMap.latLngToPx(guessMarker.getLatLng());
+            const distance = Scoring.distance(guessPx.x, guessPx.y, round.x, round.y);
+            const score = Scoring.score(distance);
+            const meters = Scoring.pxDistanceToMeters(distance);
 
-        const distance = Scoring.distance(guessPx.x, guessPx.y, round.x, round.y);
-        const score = Scoring.score(distance);
-        const meters = Scoring.pxDistanceToMeters(distance);
+            this.totalScore += score;
 
-        totalScore += score;
+            this.roundResults.push({
+                roundNum: this.roundIndex + 1,
+                guessX: Math.round(guessPx.x),
+                guessY: Math.round(guessPx.y),
+                correctX: round.x,
+                correctY: round.y,
+                distance: Math.round(distance),
+                meters,
+                score
+            });
 
-        roundResults.push({
-            roundNum: roundIndex + 1,
-            guessX: Math.round(guessPx.x),
-            guessY: Math.round(guessPx.y),
-            correctX: round.x,
-            correctY: round.y,
-            distance: Math.round(distance),
-            meters: meters,
-            score: score
-        });
+            this.gameMap.off('click');
+            this.showRoundResult(round, guessPx, distance, score);
+        },
 
-        gameMap.off('click');
-        showRoundResult(round, guessPx, distance, score);
-    }
+        showRoundResult(round, guessPx, distance, score) {
+            const isLastRound = this.roundIndex >= this.currentSeries.rounds.length - 1;
+            const meters = Scoring.pxDistanceToMeters(distance);
+            const distText = `${Math.round(distance)} px (${Scoring.formatDistance(meters)})`;
 
-    function showRoundResult(round, guessPx, distance, score) {
-        const isLastRound = roundIndex >= currentSeries.rounds.length - 1;
-        const meters = Scoring.pxDistanceToMeters(distance);
-        const distText = `${Math.round(distance)} px (${Scoring.formatDistance(meters)})`;
+            UI.showRoundResult(distText, score, this.totalScore, isLastRound);
+            UI.showScreen('roundResult');
 
-        UI.showRoundResult(distText, score, totalScore, isLastRound);
-        UI.showScreen('roundResult');
-
-        if (resultMap) {
-            resultMap.remove();
-            resultMap = null;
-        }
-
-        setTimeout(() => {
-            resultMap = GameMap.create('result-map');
+            this.resultMap = GameMap.recreate('result-map', this.resultMap);
 
             const guessLatLng = GameMap.pxToLatLng(guessPx.x, guessPx.y);
             const correctLatLng = GameMap.pxToLatLng(round.x, round.y);
 
-            GameMap.createGuessMarker(guessLatLng)
-                .bindPopup('Ваш ответ')
-                .addTo(resultMap);
-
-            GameMap.createCorrectMarker(correctLatLng)
-                .bindPopup('Правильный ответ')
-                .addTo(resultMap);
-
-            GameMap.createResultLine(guessLatLng, correctLatLng)
-                .addTo(resultMap);
+            GameMap.createGuessMarker(guessLatLng).bindPopup('Ваш ответ').addTo(this.resultMap);
+            GameMap.createCorrectMarker(correctLatLng).bindPopup('Правильный ответ').addTo(this.resultMap);
+            GameMap.createResultLine(guessLatLng, correctLatLng).addTo(this.resultMap);
 
             const bounds = L.latLngBounds([guessLatLng, correctLatLng]);
-            resultMap.fitBounds(bounds.pad(0.3));
-        }, 100);
-    }
+            this.resultMap.fitBounds(bounds.pad(0.3));
+        },
 
-    function onNextRound() {
-        roundIndex++;
+        onNextRound() {
+            this.roundIndex++;
 
-        if (roundIndex < currentSeries.rounds.length) {
-            UI.showScreen('game');
-
-            if (gameMap) {
-                gameMap.remove();
-                gameMap = null;
+            if (this.roundIndex < this.currentSeries.rounds.length) {
+                UI.showScreen('game');
+                this.gameMap = GameMap.recreate('map', this.gameMap);
+                this.startRound();
+            } else {
+                UI.showFinalResults(this.roundResults, this.totalScore);
+                UI.showScreen('final');
             }
+        },
 
-            setTimeout(() => {
-                gameMap = GameMap.create('map');
-                startRound();
-            }, 100);
-        } else {
-            UI.showFinalResults(roundResults, totalScore);
-            UI.showScreen('final');
+        onBackToMenu() {
+            if (this.gameMap) { this.gameMap.remove(); this.gameMap = null; }
+            if (this.resultMap) { this.resultMap.remove(); this.resultMap = null; }
+
+            this.rerenderMenu();
+            UI.showScreen('menu');
+        },
+
+        rerenderMenu() {
+            UI.renderSeriesList(LOCATIONS_DATA.series, (i) => this.startGame(i));
         }
-    }
+    };
 
-    function onBackToMenu() {
-        if (gameMap) { gameMap.remove(); gameMap = null; }
-        if (resultMap) { resultMap.remove(); resultMap = null; }
-
-        UI.renderSeriesList(LOCATIONS_DATA.series, startGame);
-        UI.showScreen('menu');
-    }
-
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', () => Game.init());
+    window.Game = Game;
 
 })();

@@ -6,6 +6,7 @@ const CONFIG = {
     MAX_ZOOM: 1,
 
     USE_TILES: window.location.protocol !== 'file:',
+    IS_SERVER: false, // обновляется через /api/health
 
     TILES_PATH: 'map_tiles',
     TILE_SIZE: 512,
@@ -18,7 +19,6 @@ const CONFIG = {
     LOCS_PATH: 'locs',
 
     // === Пересчёт координат: пиксели карты ↔ игровые метры ===
-    // Опорная точка: игровая (ANCHOR_GAME_X, ANCHOR_GAME_Y) = пиксельная (ANCHOR_PX_X, ANCHOR_PX_Y)
     ANCHOR_PX_X: 8980,
     ANCHOR_PX_Y: 6930,
     ANCHOR_GAME_X: -254,

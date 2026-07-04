@@ -1,40 +1,44 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
+	"time"
 )
 
-// Конфигурация сервера
-type ServerConfig struct {
-	Port    int    `json:"port"`
-	WebRoot string `json:"webRoot"`
-}
+const (
+	maxUploadSize = 20 << 20 // 20 МБ
+	maxJSONSize   = 5 << 20  // 5 МБ
+	backupsDir    = "backups"
+)
 
 func main() {
 	fmt.Println("╔══════════════════════════════════════╗")
 	fmt.Println("║        Zelda GeoGuessr Server        ║")
 	fmt.Println("╚══════════════════════════════════════╝")
 
-	// Определяем корневую папку проекта
 	webRoot := findWebRoot()
 	fmt.Printf("Корневая папка: %s\n", webRoot)
 
-	// Находим свободный порт
+	// Создаём папку для бэкапов, чтобы не светить их через FileServer
+	_ = os.MkdirAll(filepath.Join(webRoot, backupsDir), 0755)
+
 	port := findFreePort(8080)
 
-	// Настраиваем маршруты
 	mux := http.NewServeMux()
 
-	// API endpoints
 	mux.HandleFunc("/api/series", func(w http.ResponseWriter, r *http.Request) {
 		handleSeries(w, r, webRoot)
 	})
@@ -49,36 +53,56 @@ func main() {
 	})
 	mux.HandleFunc("/api/health", handleHealth)
 
-	// Статические файлы (HTML, CSS, JS, карта, тайлы, изображения)
+	// Статика — но прячем папку backups/
 	fileServer := http.FileServer(http.Dir(webRoot))
-	mux.Handle("/", fileServer)
+	mux.Handle("/", noBackups(fileServer))
 
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	url := fmt.Sprintf("http://localhost:%d", port)
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
 	fmt.Printf("Сервер запущен: %s\n", url)
 	fmt.Println("Для остановки нажмите Ctrl+C или закройте это окно")
 
-	// Открываем браузер
 	go openBrowser(url)
 
 	// Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-		<-sigChan
-		fmt.Println("\nСервер остановлен")
-		os.Exit(0)
+		<-ctx.Done()
+		fmt.Println("\nОстанавливаем сервер...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	// Запускаем сервер
-	err := http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
-	if err != nil {
+	err := server.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Printf("Ошибка запуска сервера: %v\n", err)
 		fmt.Println("Нажмите Enter для выхода...")
 		fmt.Scanln()
 	}
 }
 
-// findWebRoot ищет корневую папку проекта (где лежит index.html)
+// noBackups блокирует HTTP-доступ к папке backups/
+func noBackups(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cleaned := path.Clean(r.URL.Path)
+		if cleaned == "/"+backupsDir || strings.HasPrefix(cleaned, "/"+backupsDir+"/") {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func findWebRoot() string {
 	// Сначала проверяем папку где лежит .exe
 	exePath, err := os.Executable()
@@ -87,14 +111,12 @@ func findWebRoot() string {
 		if fileExists(filepath.Join(exeDir, "index.html")) {
 			return exeDir
 		}
-		// Может быть exe лежит в server/
 		parentDir := filepath.Dir(exeDir)
 		if fileExists(filepath.Join(parentDir, "index.html")) {
 			return parentDir
 		}
 	}
 
-	// Проверяем текущую рабочую директорию
 	cwd, err := os.Getwd()
 	if err == nil {
 		if fileExists(filepath.Join(cwd, "index.html")) {
@@ -106,7 +128,6 @@ func findWebRoot() string {
 		}
 	}
 
-	// Если ничего не нашли — используем текущую папку
 	fmt.Println("⚠ Не удалось найти index.html, используется текущая папка")
 	return "."
 }
@@ -119,7 +140,7 @@ func fileExists(path string) bool {
 // findFreePort находит свободный порт начиная с preferred
 func findFreePort(preferred int) int {
 	for port := preferred; port < preferred+100; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err == nil {
 			ln.Close()
 			return port
