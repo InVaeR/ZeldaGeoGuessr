@@ -183,18 +183,8 @@ const Tools = {
             const delBtn = e.target.closest('.editor-series-del');
             const item = e.target.closest('.editor-series-item');
             if (editBtn && item) {
-                const span = item.querySelector('.editor-series-name');
-                if (span && !span.classList.contains('editing')) {
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.className = 'editor-series-name-input';
-                    input.value = span.textContent;
-                    input.dataset.index = span.dataset.index;
-                    span.classList.add('editing');
-                    span.replaceWith(input);
-                    input.focus();
-                    input.select();
-                }
+                const input = item.querySelector('.editor-series-name-input');
+                if (input) input.focus();
                 return;
             }
             if (delBtn && item) {
@@ -212,20 +202,16 @@ const Tools = {
                     self._editorRenderSeries();
                     self._editorRenderRounds();
                 }
-            } else if (item) {
+            } else if (item && !e.target.classList.contains('editor-series-name-input')) {
                 self._editorSelectSeries(parseInt(item.dataset.index, 10));
             }
         });
-        document.getElementById('editor-series-list').addEventListener('focusout', (e) => {
+        document.getElementById('editor-series-list').addEventListener('change', (e) => {
             const inp = e.target.closest('.editor-series-name-input');
             if (inp) {
-                self._editorFinalizeSeriesName(inp);
-            }
-        });
-        document.getElementById('editor-series-list').addEventListener('keydown', (e) => {
-            const inp = e.target.closest('.editor-series-name-input');
-            if (inp && e.key === 'Enter') {
-                inp.blur();
+                const idx = parseInt(inp.dataset.index, 10);
+                self.editor.data.series[idx].name = inp.value;
+                self._editorMarkDirty();
             }
         });
 
@@ -442,10 +428,11 @@ const Tools = {
             item.className = 'editor-series-item' + (isSelected ? ' selected' : '');
             item.dataset.index = i;
 
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'editor-series-name';
-            nameSpan.textContent = s.name;
-            nameSpan.dataset.index = i;
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'editor-series-name-input';
+            nameInput.value = s.name;
+            nameInput.dataset.index = i;
 
             const count = document.createElement('span');
             count.className = 'editor-series-count';
@@ -463,7 +450,7 @@ const Tools = {
             del.title = 'Удалить серию';
             del.textContent = '✕';
 
-            item.append(nameSpan, count, editBtn, del);
+            item.append(nameInput, count, editBtn, del);
             frag.appendChild(item);
         });
 
@@ -571,18 +558,6 @@ const Tools = {
 
     _editorMarkDirty() {
         this.editor.dirty = true;
-    },
-
-    _editorFinalizeSeriesName(input) {
-        const idx = parseInt(input.dataset.index, 10);
-        const name = input.value.trim() || 'Безымянная';
-        this.editor.data.series[idx].name = name;
-        this._editorMarkDirty();
-        const span = document.createElement('span');
-        span.className = 'editor-series-name';
-        span.textContent = name;
-        span.dataset.index = idx;
-        input.replaceWith(span);
     },
 
     _assignUids() {
