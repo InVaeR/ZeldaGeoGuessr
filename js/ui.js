@@ -159,7 +159,12 @@ const UI = {
         seriesList.forEach((series, index) => {
             const btn = document.createElement('button');
             btn.className = 'btn-series';
-            btn.textContent = series.name;
+            if (series.rounds.length === 0) {
+                btn.disabled = true;
+                btn.textContent = series.name + ' (нет раундов)';
+            } else {
+                btn.textContent = series.name;
+            }
             btn.addEventListener('click', () => onSelect(index));
             this.els.seriesList.appendChild(btn);
         });

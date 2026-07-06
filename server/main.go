@@ -99,6 +99,9 @@ func noBackups(next http.Handler) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		if cleaned == "/locations_data.js" || strings.HasPrefix(cleaned, "/locs/") {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

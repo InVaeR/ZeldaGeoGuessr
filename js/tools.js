@@ -76,7 +76,9 @@ const Tools = {
 
     close() {
         if (this.editor.dirty) {
-            if (!confirm('Есть несохранённые изменения. Выйти без сохранения?')) return;
+            LOCATIONS_DATA.series = structuredClone(this.editor.data.series);
+            this.editor.data = structuredClone(LOCATIONS_DATA);
+            this.editor.dirty = false;
         }
         if (this.map) {
             this.map.remove();
@@ -380,9 +382,10 @@ const Tools = {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const idx = parseInt(btn.dataset.index, 10);
-                if (confirm(`Удалить серию "${data.series[idx].name}"?`)) {
-                    data.series.splice(idx, 1);
-                    if (this.editor.selectedSeries >= data.series.length) {
+                const seriesList = this.editor.data.series;
+                if (confirm(`Удалить серию "${seriesList[idx].name}"?`)) {
+                    seriesList.splice(idx, 1);
+                    if (this.editor.selectedSeries >= seriesList.length) {
                         this.editor.selectedSeries = -1;
                     } else if (this.editor.selectedSeries > idx) {
                         this.editor.selectedSeries--;
@@ -476,10 +479,14 @@ const Tools = {
         list.querySelectorAll('.editor-round-del').forEach(btn => {
             btn.addEventListener('click', () => {
                 const ri = parseInt(btn.dataset.index, 10);
-                series.rounds.splice(ri, 1);
+                const s = this.editor.data.series[this.editor.selectedSeries];
+                if (!confirm(`Удалить раунд ${ri+1} (${s.rounds[ri].image})?`)) return;
+                s.rounds.splice(ri, 1);
                 this._editorMarkDirty();
-                if (this.editor.selectedRound >= 0) {
+                if (this.editor.selectedRound === ri) {
                     this._editorCancelRound();
+                } else if (this.editor.selectedRound > ri) {
+                    this.editor.selectedRound--;
                 }
                 this._editorRenderRounds();
             });
@@ -601,7 +608,7 @@ const Tools = {
 
         const img = document.createElement('img');
         img.alt = 'Превью';
-        img.src = `${CONFIG.LOCS_PATH}/${filename}`;
+        img.src = `${CONFIG.LOCS_PATH}/${filename}?v=${Date.now()}`;
         img.onerror = () => {
             container.innerHTML = '<span class="editor-no-image">Изображение не найдено</span>';
         };
@@ -679,6 +686,8 @@ const Tools = {
             this.editor.data = structuredClone(LOCATIONS_DATA);
             this.editor.dirty = false;
             window.Game.rerenderMenu();
+            this._editorRenderSeries();
+            this._editorRenderRounds();
 
             this._editorShowStatus('✓ Применено в памяти. Файл скачан — замените locations_data.js', 'warning');
             return;
@@ -690,6 +699,8 @@ const Tools = {
             this.editor.data = structuredClone(LOCATIONS_DATA);
             this.editor.dirty = false;
             window.Game.rerenderMenu();
+            this._editorRenderSeries();
+            this._editorRenderRounds();
             this._editorShowStatus(`✓ Сохранено! Бэкап: ${result.backup}`, 'success');
         } catch (err) {
             this._editorShowStatus('✕ Ошибка: ' + err.message, 'error');

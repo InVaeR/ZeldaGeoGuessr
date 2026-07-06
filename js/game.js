@@ -22,9 +22,9 @@
             } catch (_) {}
         },
 
-        init() {
+        async init() {
             UI.init();
-            this._detectServer();
+            await this._detectServer();
             this.rerenderMenu();
 
             UI.els.btnConfirm.addEventListener('click', () => this.onConfirm());
