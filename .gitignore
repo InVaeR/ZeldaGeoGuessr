@@ -23,3 +23,6 @@ Thumbs.db
 backups/
 audit.md
 AGENTS.md
+
+# Бинарники
+*.exe

@@ -5,6 +5,14 @@
 (function () {
     'use strict';
 
+    if (!AbortSignal.timeout) {
+        AbortSignal.timeout = function (ms) {
+            const ctrl = new AbortController();
+            setTimeout(function () { ctrl.abort(); }, ms);
+            return ctrl.signal;
+        };
+    }
+
     const Game = {
         currentSeries: null,
         roundIndex: 0,
@@ -24,27 +32,31 @@
 
         async init() {
             UI.init();
-            await this._detectServer();
-            if (CONFIG.IS_SERVER) {
-                try {
-                    const r = await fetch('/api/series');
-                    if (r.ok) {
-                        const data = await r.json();
-                        LOCATIONS_DATA.series = data.series || data;
-                    }
-                } catch (_) {}
-            }
-            this.rerenderMenu();
 
             UI.els.btnConfirm.addEventListener('click', () => this.onConfirm());
             UI.els.btnNextRound.addEventListener('click', () => this.onNextRound());
             UI.els.btnBackMenu.addEventListener('click', () => this.onBackToMenu());
             UI.els.btnToggleImage.addEventListener('click', () => UI.toggleImage());
             UI.els.locationImage.addEventListener('click', () => UI.openImageFullscreen());
-
             document.getElementById('btn-tools').addEventListener('click', () => Tools.open());
 
             UI.showScreen('menu');
+            UI.els.seriesList.innerHTML = '<div class="menu-loading">Загрузка...</div>';
+
+            await this._detectServer();
+            if (CONFIG.IS_SERVER) {
+                UI.els.seriesList.innerHTML = '<div class="menu-loading">Загрузка...</div>';
+                try {
+                    const r = await fetch('/api/series', { signal: AbortSignal.timeout(5000) });
+                    if (r.ok) {
+                        const data = await r.json();
+                        if (data && Array.isArray(data.series)) {
+                            LOCATIONS_DATA.series = data.series;
+                        }
+                    }
+                } catch (_) {}
+            }
+            this.rerenderMenu();
         },
 
         startGame(seriesIndex) {
@@ -56,7 +68,7 @@
             UI.updateHUD(this.currentSeries.name, 1, this.currentSeries.rounds.length, 0);
             UI.showScreen('game');
 
-            this.gameMap = GameMap.recreate('map', this.gameMap);
+            this.gameMap = GameMap.create('map');
             this.startRound();
         },
 
@@ -144,7 +156,6 @@
 
             if (this.roundIndex < this.currentSeries.rounds.length) {
                 UI.showScreen('game');
-                this.gameMap = GameMap.recreate('map', this.gameMap);
                 this.startRound();
             } else {
                 UI.showFinalResults(this.roundResults, this.totalScore);

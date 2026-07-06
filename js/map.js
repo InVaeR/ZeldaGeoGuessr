@@ -84,14 +84,31 @@ const GameMap = {
             bounds: this.getBounds()
         }).addTo(map);
 
-        let fallbackDone = false;
-        layer.on('tileerror', () => {
-            if (fallbackDone) return;
-            fallbackDone = true;
+        let tileErrors = 0;
+        const TILE_ERROR_THRESHOLD = 3;
+        layer.on('tileerror', function () {
+            tileErrors++;
+            if (tileErrors < TILE_ERROR_THRESHOLD) return;
             map.removeLayer(layer);
-            const bounds = this.getBounds();
-            L.imageOverlay(CONFIG.MAP_IMAGE, bounds).addTo(map);
+            GameMap._fallbackToImage(map);
         });
+    },
+
+    _fallbackToImage(map) {
+        const bounds = this.getBounds();
+        const img = new Image();
+        img.onload = function () {
+            L.imageOverlay(CONFIG.MAP_IMAGE, bounds).addTo(map);
+        };
+        img.onerror = function () {
+            const div = L.divIcon({
+                className: '',
+                html: '<div style="width:100%;text-align:center;padding:40px;color:#888;">Карта не загружена (нет тайлов и нет map_high.jpg)</div>',
+                iconSize: [300, 40]
+            });
+            L.marker(bounds.getCenter(), { icon: div, interactive: false }).addTo(map);
+        };
+        img.src = CONFIG.MAP_IMAGE;
     },
 
     // ========================

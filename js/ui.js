@@ -266,9 +266,20 @@ const UI = {
         img.src = this.els.locationImage.src;
         overlay.classList.add('active');
 
+        const errorOverlay = document.getElementById('viewer-error');
+        if (errorOverlay) errorOverlay.style.display = 'none';
         img.onerror = () => {
-            container.innerHTML = '<div style="color:#888;text-align:center;padding:40px;">Не удалось загрузить изображение</div>';
+            const el = document.getElementById('viewer-error') || (() => {
+                const e = document.createElement('div');
+                e.id = 'viewer-error';
+                e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:1.1rem;background:rgba(0,0,0,0.7);z-index:2002;';
+                e.textContent = 'Не удалось загрузить изображение';
+                container.appendChild(e);
+                return e;
+            })();
+            el.style.display = 'flex';
         };
+        img.onload = () => { img.onerror = null; };
 
         window.addEventListener('mousemove', this.viewer._onMove);
         window.addEventListener('mouseup', this.viewer._onUp);
@@ -305,6 +316,9 @@ const UI = {
 
         window.removeEventListener('mousemove', this.viewer._onMove);
         window.removeEventListener('mouseup', this.viewer._onUp);
+
+        const errorOverlay = document.getElementById('viewer-error');
+        if (errorOverlay) errorOverlay.style.display = 'none';
 
         if (this.viewer._escHandler) {
             document.removeEventListener('keydown', this.viewer._escHandler);

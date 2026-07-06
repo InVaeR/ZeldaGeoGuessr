@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,14 +18,30 @@ import (
 var safeFilenameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 func checkOrigin(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		origin = r.Header.Get("Referer")
+	raw := r.Header.Get("Origin")
+	if raw == "" {
+		raw = r.Header.Get("Referer")
 	}
-	if origin == "" {
+	if raw == "" {
 		return true
 	}
-	return strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") || strings.Contains(origin, "::1")
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+	if u.Scheme == "file" {
+		return true
+	}
+	if u.Host == r.Host {
+		return true
+	}
+	allowed := []string{"localhost", "127.0.0.1"}
+	for _, a := range allowed {
+		if u.Host == a || strings.HasPrefix(u.Host, a+":") {
+			return true
+		}
+	}
+	return false
 }
 
 // ========================
@@ -44,13 +61,40 @@ func handleSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 	}
 
 	content := string(data)
-	startIdx := strings.Index(content, "{")
-	endIdx := strings.LastIndex(content, "}")
-	if startIdx == -1 || endIdx == -1 || endIdx <= startIdx {
-		http.Error(w, "Неверный формат locations_data.js", http.StatusInternalServerError)
+	const marker = "const LOCATIONS_DATA = "
+	markerIdx := strings.Index(content, marker)
+	if markerIdx == -1 {
+		http.Error(w, "Не найден маркер LOCATIONS_DATA", http.StatusInternalServerError)
 		return
 	}
-	jsonStr := content[startIdx : endIdx+1]
+	jsonStart := markerIdx + len(marker)
+	// ищем первый { после маркера
+	braceStart := strings.Index(content[jsonStart:], "{")
+	if braceStart == -1 {
+		http.Error(w, "Не найден JSON в locations_data.js", http.StatusInternalServerError)
+		return
+	}
+	braceStart += jsonStart
+	// балансируем скобки чтобы найти закрывающую
+	depth := 0
+	endIdx := -1
+	for i := braceStart; i < len(content); i++ {
+		ch := content[i]
+		if ch == '{' {
+			depth++
+		} else if ch == '}' {
+			depth--
+			if depth == 0 {
+				endIdx = i
+				break
+			}
+		}
+	}
+	if endIdx == -1 {
+		http.Error(w, "Непарные скобки в locations_data.js", http.StatusInternalServerError)
+		return
+	}
+	jsonStr := content[braceStart : endIdx+1]
 
 	// Проверяем что это валидный JSON
 	var check interface{}

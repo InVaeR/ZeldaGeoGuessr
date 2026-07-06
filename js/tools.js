@@ -63,7 +63,8 @@ const Tools = {
         editMarker: null,
         dirty: false,
         _roundSnapshot: null,
-        _uidCounter: 0
+        _uidCounter: 0,
+        pendingDeletes: null
     },
 
     // ================================================
@@ -92,6 +93,9 @@ const Tools = {
 
     close() {
         this._editorCommitRoundForm();
+        this.editor.selectedRound = -1;
+        this.editor._roundSnapshot = null;
+        document.getElementById('editor-round-edit').style.display = 'none';
         if (this.editor.dirty) {
             if (!confirm('Есть несохранённые изменения. Применить в память? (на диск НЕ записано)')) {
                 this.editor.data = structuredClone(LOCATIONS_DATA);
@@ -185,14 +189,16 @@ const Tools = {
                 const idx = parseInt(item.dataset.index, 10);
                 const seriesList = self.editor.data.series;
                 if (confirm(`Удалить серию "${seriesList[idx].name}"?`)) {
-                    seriesList.splice(idx, 1);
-                    if (self.editor.selectedSeries >= seriesList.length) {
+                    if (self.editor.selectedSeries === idx) {
+                        self.editor._roundSnapshot = null;
+                        self._editorCancelRound();
                         self.editor.selectedSeries = -1;
-                    } else if (self.editor.selectedSeries > idx) {
+                    }
+                    seriesList.splice(idx, 1);
+                    if (self.editor.selectedSeries > idx) {
                         self.editor.selectedSeries--;
                     }
                     self._editorMarkDirty();
-                    self._editorCancelRound();
                     self._editorRenderSeries();
                     self._editorRenderRounds();
                 }
@@ -206,6 +212,16 @@ const Tools = {
                 const idx = parseInt(inp.dataset.index, 10);
                 self.editor.data.series[idx].name = inp.value;
                 self._editorMarkDirty();
+                if (idx === self.editor.selectedSeries) {
+                    document.getElementById('editor-series-name').textContent = inp.value;
+                    const seriesItems = document.querySelectorAll('#editor-series-list .editor-item');
+                    seriesItems.forEach(function (el) {
+                        const nameEl = el.querySelector('.editor-series-name-input');
+                        if (nameEl && parseInt(nameEl.dataset.index, 10) === idx) {
+                            nameEl.value = inp.value;
+                        }
+                    });
+                }
             }
         });
 
@@ -221,15 +237,26 @@ const Tools = {
                 const round = s.rounds[ri];
                 if (!confirm(`Удалить раунд ${ri+1} (${round.image})?`)) return;
                 if (Api.isServer && round.image && confirm('Также удалить файл изображения с диска?')) {
-                    Api.deleteLocationImage(round.image).catch(() => {});
+                    const isUsed = self.editor.data.series.some(function (sr) {
+                        return sr.rounds.some(function (rr) {
+                            return rr.image === round.image;
+                        });
+                    });
+                    if (isUsed) {
+                        alert(`Файл "${round.image}" используется в другом раунде — удаление отменено.`);
+                    } else {
+                        if (!self.editor.pendingDeletes) self.editor.pendingDeletes = new Set();
+                        self.editor.pendingDeletes.add(round.image);
+                    }
                 }
-                s.rounds.splice(ri, 1);
                 self._editorMarkDirty();
                 if (self.editor.selectedRound === ri) {
+                    self.editor._roundSnapshot = null;
                     self._editorCancelRound();
                 } else if (self.editor.selectedRound > ri) {
                     self.editor.selectedRound--;
                 }
+                s.rounds.splice(ri, 1);
                 self._editorRenderRounds();
             }
         });
@@ -694,16 +721,15 @@ const Tools = {
             return;
         }
 
-        let filename = document.getElementById('editor-round-image').value || file.name;
-        const currentVal = document.getElementById('editor-round-image').value;
-        const defaultPattern = /^location_s\d+_i\d+\.png$/;
-        if (currentVal && !defaultPattern.test(currentVal) && currentVal !== filename) {
-            if (!confirm(`Заменить "${currentVal}" на "${filename}"?`)) return;
+        const fieldName = document.getElementById('editor-round-image').value.trim();
+        if (fieldName && fieldName !== file.name) {
+            if (!confirm(`Загрузить "${file.name}" под именем "${fieldName}"? Существующий файл будет перезаписан.`)) return;
         }
+        const filename = fieldName || file.name;
 
         if (Api.isServer) {
-            const uploadBtn = document.getElementById('editor-upload-file');
-            uploadBtn.disabled = true;
+            const uploadLabel = document.querySelector('label[for="editor-upload-file"]');
+            if (uploadLabel) uploadLabel.style.pointerEvents = 'none';
             this._editorShowStatus('⏳ Загрузка...', 'warning');
             try {
                 const data = await Api.uploadLocation(file, filename);
@@ -716,7 +742,8 @@ const Tools = {
             } catch (err) {
                 this._editorShowStatus('✕ Ошибка загрузки: ' + err.message, 'error');
             } finally {
-                uploadBtn.disabled = false;
+                const uploadLabel = document.querySelector('label[for="editor-upload-file"]');
+                if (uploadLabel) uploadLabel.style.pointerEvents = '';
             }
         } else {
             const reader = new FileReader();
@@ -737,24 +764,55 @@ const Tools = {
     //  РЕДАКТОР: СОХРАНЕНИЕ
     // ================================================
 
+    async _processPendingDeletes() {
+        if (!this.editor.pendingDeletes || this.editor.pendingDeletes.size === 0) return;
+        const files = Array.from(this.editor.pendingDeletes);
+        this.editor.pendingDeletes.clear();
+        const failed = [];
+        for (const f of files) {
+            try {
+                const res = await Api.deleteLocationImage(f);
+                if (!res || res.status !== 'ok') failed.push(f);
+            } catch (_) {
+                failed.push(f);
+            }
+        }
+        if (failed.length > 0) {
+            this._editorShowStatus('⚠ Не удалось удалить: ' + failed.join(', '), 'error');
+        }
+    },
+
     async _editorSaveAll() {
         this._editorCommitRoundForm();
 
         const data = this.editor.data;
         const errors = [];
+        const emptyWarnings = [];
+        const seenImages = {};
+        const seenIds = {};
         data.series.forEach((s, si) => {
+            if (!s.id) errors.push(`Серия «${s.name}»: отсутствует id`);
+            if (s.id != null) {
+                if (seenIds[s.id]) errors.push(`Дубликат id=${s.id} (серии "${s.name}" и "${seenIds[s.id]}")`);
+                else seenIds[s.id] = s.name;
+            }
             if (s.rounds.length === 0) {
-                errors.push(`Серия «${s.name}» не содержит раундов`);
+                emptyWarnings.push(`Серия «${s.name}» не содержит раундов`);
             }
             s.rounds.forEach((r, ri) => {
                 if (!r.image) errors.push(`Раунд ${si+1}.${ri+1}: пустое имя файла`);
-                if (r.x < 0 || r.x > 18000) errors.push(`Раунд ${si+1}.${ri+1}: X вне карты (0–18000)`);
-                if (r.y < 0 || r.y > 15000) errors.push(`Раунд ${si+1}.${ri+1}: Y вне карты (0–15000)`);
+                if (r.image && seenImages[r.image]) errors.push(`Дубликат файла "${r.image}" (раунды ${seenImages[r.image]} и ${si+1}.${ri+1})`);
+                else if (r.image) seenImages[r.image] = `${si+1}.${ri+1}`;
+                if (r.x < 0 || r.x > CONFIG.MAP_WIDTH) errors.push(`Раунд ${si+1}.${ri+1}: X вне карты (0–${CONFIG.MAP_WIDTH})`);
+                if (r.y < 0 || r.y > CONFIG.MAP_HEIGHT) errors.push(`Раунд ${si+1}.${ri+1}: Y вне карты (0–${CONFIG.MAP_HEIGHT})`);
             });
         });
         if (errors.length > 0) {
             this._editorShowStatus('⚠ ' + errors.join('; '), 'error');
             return;
+        }
+        if (emptyWarnings.length > 0) {
+            if (!confirm('⚠ ' + emptyWarnings.join('; ') + '\n\nПродолжить сохранение?')) return;
         }
 
         const cleanData = structuredClone(data);
@@ -784,6 +842,7 @@ const Tools = {
 
         try {
             const result = await Api.saveSeries(cleanData);
+            await this._processPendingDeletes();
             LOCATIONS_DATA.series = structuredClone(data.series);
             this.editor.data = structuredClone(LOCATIONS_DATA);
             this._assignUids();
