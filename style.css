@@ -877,7 +877,6 @@ body {
     white-space: nowrap;
 }
 
-.editor-series-edit-btn,
 .editor-series-del {
     background: none;
     border: none;
@@ -887,11 +886,6 @@ body {
     padding: 2px 4px;
     border-radius: 3px;
     transition: all 0.1s;
-}
-
-.editor-series-edit-btn:hover {
-    color: #7ec8e3;
-    background: rgba(126, 200, 227, 0.15);
 }
 
 .editor-series-del:hover {
