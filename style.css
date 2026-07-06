@@ -543,7 +543,7 @@ body {
     top: 55px;
     right: 20px;
     z-index: 1000;
-    width: 340px;
+    width: 420px;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
     background: rgba(10, 10, 15, 0.95);
@@ -877,6 +877,7 @@ body {
     white-space: nowrap;
 }
 
+.editor-series-edit-btn,
 .editor-series-del {
     background: none;
     border: none;
@@ -886,6 +887,11 @@ body {
     padding: 2px 4px;
     border-radius: 3px;
     transition: all 0.1s;
+}
+
+.editor-series-edit-btn:hover {
+    color: #7ec8e3;
+    background: rgba(126, 200, 227, 0.15);
 }
 
 .editor-series-del:hover {
@@ -1035,9 +1041,10 @@ body {
 
 .editor-image-preview {
     margin-top: 8px;
-    max-height: 120px;
-    overflow: hidden;
+    max-height: 300px;
+    overflow: auto;
     border-radius: 4px;
+    background: #0a0a0a;
 }
 
 .editor-image-preview img {

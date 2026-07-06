@@ -179,8 +179,14 @@ const Tools = {
 
         // Event delegation for editor series list
         document.getElementById('editor-series-list').addEventListener('click', (e) => {
+            const editBtn = e.target.closest('.editor-series-edit-btn');
             const delBtn = e.target.closest('.editor-series-del');
             const item = e.target.closest('.editor-series-item');
+            if (editBtn && item) {
+                const input = item.querySelector('.editor-series-name-input');
+                if (input) input.focus();
+                return;
+            }
             if (delBtn && item) {
                 const idx = parseInt(item.dataset.index, 10);
                 const seriesList = self.editor.data.series;
@@ -432,13 +438,19 @@ const Tools = {
             count.className = 'editor-series-count';
             count.textContent = `${s.rounds.length} р.`;
 
+            const editBtn = document.createElement('button');
+            editBtn.className = 'editor-series-edit-btn';
+            editBtn.dataset.index = i;
+            editBtn.title = 'Редактировать название';
+            editBtn.textContent = '✎';
+
             const del = document.createElement('button');
             del.className = 'editor-series-del';
             del.dataset.index = i;
             del.title = 'Удалить серию';
             del.textContent = '✕';
 
-            item.append(nameInput, count, del);
+            item.append(nameInput, count, editBtn, del);
             frag.appendChild(item);
         });
 

@@ -260,10 +260,15 @@ const UI = {
     openImageFullscreen() {
         const overlay = document.getElementById('image-overlay');
         const img = document.getElementById('viewer-image');
+        const container = document.getElementById('viewer-container');
         const self = this;
 
         img.src = this.els.locationImage.src;
         overlay.classList.add('active');
+
+        img.onerror = () => {
+            container.innerHTML = '<div style="color:#888;text-align:center;padding:40px;">Не удалось загрузить изображение</div>';
+        };
 
         window.addEventListener('mousemove', this.viewer._onMove);
         window.addEventListener('mouseup', this.viewer._onUp);
@@ -273,6 +278,11 @@ const UI = {
                 if (e.key === 'Escape') self.closeViewer();
             };
             document.addEventListener('keydown', this.viewer._escHandler);
+        }
+
+        if (!this.viewer._resizeHandler) {
+            this.viewer._resizeHandler = () => self._viewerFit();
+            window.addEventListener('resize', this.viewer._resizeHandler);
         }
 
         const doFit = () => {
@@ -299,6 +309,10 @@ const UI = {
         if (this.viewer._escHandler) {
             document.removeEventListener('keydown', this.viewer._escHandler);
             this.viewer._escHandler = null;
+        }
+        if (this.viewer._resizeHandler) {
+            window.removeEventListener('resize', this.viewer._resizeHandler);
+            this.viewer._resizeHandler = null;
         }
     },
 
@@ -378,8 +392,12 @@ const UI = {
     // ========================
 
     escHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str == null ? '' : String(str);
-        return div.innerHTML;
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 };
