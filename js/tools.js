@@ -24,6 +24,19 @@ const Api = {
             throw new Error(`HTTP ${r.status}: ${text || 'Ошибка загрузки'}`);
         }
         return r.json();
+    },
+
+    async deleteLocationImage(filename) {
+        const r = await fetch('/api/delete-location-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename })
+        });
+        if (!r.ok) {
+            const text = await r.text().catch(() => '');
+            throw new Error(`HTTP ${r.status}: ${text || 'Ошибка удаления'}`);
+        }
+        return r.json();
     }
 };
 
@@ -48,7 +61,9 @@ const Tools = {
         selectedSeries: -1,
         selectedRound: -1,
         editMarker: null,
-        dirty: false
+        dirty: false,
+        _roundSnapshot: null,
+        _uidCounter: 0
     },
 
     // ================================================
@@ -59,6 +74,7 @@ const Tools = {
         this.cal.currentD = CONFIG.CALIBRATION_D;
         this.editor.data = structuredClone(LOCATIONS_DATA);
         this.editor.dirty = false;
+        this._assignUids();
 
         UI.showScreen('tools');
 
@@ -75,10 +91,20 @@ const Tools = {
     },
 
     close() {
+        this._editorCommitRoundForm();
         if (this.editor.dirty) {
-            LOCATIONS_DATA.series = structuredClone(this.editor.data.series);
-            this.editor.data = structuredClone(LOCATIONS_DATA);
-            this.editor.dirty = false;
+            if (!confirm('Есть несохранённые изменения. Применить в память? (на диск НЕ записано)')) {
+                this.editor.data = structuredClone(LOCATIONS_DATA);
+                this._assignUids();
+                this.editor.dirty = false;
+                this._editorRenderSeries();
+                this._editorRenderRounds();
+            } else {
+                LOCATIONS_DATA.series = structuredClone(this.editor.data.series);
+                this.editor.data = structuredClone(LOCATIONS_DATA);
+                this._assignUids();
+                this.editor.dirty = false;
+            }
         }
         if (this.map) {
             this.map.remove();
@@ -477,10 +503,16 @@ const Tools = {
         });
 
         list.querySelectorAll('.editor-round-del').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const ri = parseInt(btn.dataset.index, 10);
                 const s = this.editor.data.series[this.editor.selectedSeries];
-                if (!confirm(`Удалить раунд ${ri+1} (${s.rounds[ri].image})?`)) return;
+                const round = s.rounds[ri];
+                if (!confirm(`Удалить раунд ${ri+1} (${round.image})?`)) return;
+                if (Api.isServer && round.image && confirm('Также удалить файл изображения с диска?')) {
+                    try {
+                        await Api.deleteLocationImage(round.image);
+                    } catch (_) {}
+                }
                 s.rounds.splice(ri, 1);
                 this._editorMarkDirty();
                 if (this.editor.selectedRound === ri) {
@@ -499,13 +531,20 @@ const Tools = {
 
         const series = this.editor.data.series[idx];
         const sNum = String(series.id).padStart(2, '0');
-        const rNum = String(series.rounds.length + 1).padStart(2, '0');
 
-        series.rounds.push({
-            image: `location_s${sNum}_i${rNum}.png`,
+        const used = new Set(series.rounds.map(r => r.image));
+        let rNum = 1;
+        while (used.has(`location_s${sNum}_i${String(rNum).padStart(2, '0')}.png`)) {
+            rNum++;
+        }
+
+        const newRound = {
+            image: `location_s${sNum}_i${String(rNum).padStart(2, '0')}.png`,
             x: 9000,
             y: 7500
-        });
+        };
+        newRound._uid = ++this.editor._uidCounter;
+        series.rounds.push(newRound);
 
         this._editorMarkDirty();
         this._editorRenderRounds();
@@ -514,6 +553,24 @@ const Tools = {
 
     _editorMarkDirty() {
         this.editor.dirty = true;
+    },
+
+    _assignUids() {
+        this.editor._uidCounter = 0;
+        this.editor.data.series.forEach(s => {
+            s.rounds.forEach(r => {
+                r._uid = ++this.editor._uidCounter;
+            });
+        });
+    },
+
+    _stripUids(obj) {
+        if (Array.isArray(obj)) {
+            obj.forEach(v => this._stripUids(v));
+        } else if (obj && typeof obj === 'object') {
+            delete obj._uid;
+            Object.values(obj).forEach(v => this._stripUids(v));
+        }
     },
 
     _editorCommitRoundForm() {
@@ -537,6 +594,7 @@ const Tools = {
         this.editor.selectedRound = roundIndex;
 
         const round = this.editor.data.series[idx].rounds[roundIndex];
+        this.editor._roundSnapshot = structuredClone(round);
 
         document.getElementById('editor-round-edit').style.display = 'block';
         document.getElementById('editor-round-image').value = round.image;
@@ -548,12 +606,15 @@ const Tools = {
     },
 
     _editorSaveRound() {
+        this._editorDoneRound();
+    },
+
+    _editorDoneRound() {
         const idx = this.editor.selectedSeries;
         const ri = this.editor.selectedRound;
         if (idx < 0 || ri < 0) return;
 
-        this._editorCommitRoundForm();
-
+        this.editor._roundSnapshot = null;
         document.getElementById('editor-round-edit').style.display = 'none';
         this.editor.selectedRound = -1;
 
@@ -566,6 +627,15 @@ const Tools = {
     },
 
     _editorCancelRound() {
+        const idx = this.editor.selectedSeries;
+        const ri = this.editor.selectedRound;
+        if (idx >= 0 && ri >= 0 && this.editor._roundSnapshot) {
+            const snap = this.editor._roundSnapshot;
+            this.editor.data.series[idx].rounds[ri].image = snap.image;
+            this.editor.data.series[idx].rounds[ri].x = snap.x;
+            this.editor.data.series[idx].rounds[ri].y = snap.y;
+        }
+        this.editor._roundSnapshot = null;
         document.getElementById('editor-round-edit').style.display = 'none';
         this.editor.selectedRound = -1;
 
@@ -573,6 +643,8 @@ const Tools = {
             this.map.removeLayer(this.editor.editMarker);
             this.editor.editMarker = null;
         }
+
+        this._editorRenderRounds();
     },
 
     _editorOnMapClick(e) {
@@ -629,7 +701,12 @@ const Tools = {
             return;
         }
 
-        const filename = document.getElementById('editor-round-image').value || file.name;
+        let filename = document.getElementById('editor-round-image').value || file.name;
+        const currentVal = document.getElementById('editor-round-image').value;
+        const defaultPattern = /^location_s\d+_i\d+\.png$/;
+        if (currentVal && !defaultPattern.test(currentVal) && currentVal !== filename) {
+            if (!confirm(`Заменить "${currentVal}" на "${filename}"?`)) return;
+        }
 
         if (Api.isServer) {
             const uploadBtn = document.getElementById('editor-upload-file');
@@ -671,9 +748,27 @@ const Tools = {
         this._editorCommitRoundForm();
 
         const data = this.editor.data;
+        const errors = [];
+        data.series.forEach((s, si) => {
+            if (s.rounds.length === 0) {
+                errors.push(`Серия «${s.name}» не содержит раундов`);
+            }
+            s.rounds.forEach((r, ri) => {
+                if (!r.image) errors.push(`Раунд ${si+1}.${ri+1}: пустое имя файла`);
+                if (r.x < 0 || r.x > 18000) errors.push(`Раунд ${si+1}.${ri+1}: X вне карты (0–18000)`);
+                if (r.y < 0 || r.y > 15000) errors.push(`Раунд ${si+1}.${ri+1}: Y вне карты (0–15000)`);
+            });
+        });
+        if (errors.length > 0) {
+            this._editorShowStatus('⚠ ' + errors.join('; '), 'error');
+            return;
+        }
+
+        const cleanData = structuredClone(data);
+        this._stripUids(cleanData);
 
         if (!Api.isServer) {
-            const json = JSON.stringify(data, null, 4);
+            const json = JSON.stringify(cleanData, null, 4);
             const blob = new Blob([`const LOCATIONS_DATA = ${json};\n`], { type: 'text/javascript' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -684,6 +779,7 @@ const Tools = {
 
             LOCATIONS_DATA.series = structuredClone(data.series);
             this.editor.data = structuredClone(LOCATIONS_DATA);
+            this._assignUids();
             this.editor.dirty = false;
             window.Game.rerenderMenu();
             this._editorRenderSeries();
@@ -694,9 +790,10 @@ const Tools = {
         }
 
         try {
-            const result = await Api.saveSeries(data);
+            const result = await Api.saveSeries(cleanData);
             LOCATIONS_DATA.series = structuredClone(data.series);
             this.editor.data = structuredClone(LOCATIONS_DATA);
+            this._assignUids();
             this.editor.dirty = false;
             window.Game.rerenderMenu();
             this._editorRenderSeries();
