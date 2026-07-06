@@ -176,6 +176,63 @@ const Tools = {
         document.getElementById('editor-round-image').addEventListener('input', () => self._editorCommitRoundForm());
         document.getElementById('editor-round-x').addEventListener('input', () => self._editorCommitRoundForm());
         document.getElementById('editor-round-y').addEventListener('input', () => self._editorCommitRoundForm());
+
+        // Event delegation for editor series list
+        document.getElementById('editor-series-list').addEventListener('click', (e) => {
+            const delBtn = e.target.closest('.editor-series-del');
+            const item = e.target.closest('.editor-series-item');
+            if (delBtn && item) {
+                const idx = parseInt(item.dataset.index, 10);
+                const seriesList = self.editor.data.series;
+                if (confirm(`Удалить серию "${seriesList[idx].name}"?`)) {
+                    seriesList.splice(idx, 1);
+                    if (self.editor.selectedSeries >= seriesList.length) {
+                        self.editor.selectedSeries = -1;
+                    } else if (self.editor.selectedSeries > idx) {
+                        self.editor.selectedSeries--;
+                    }
+                    self._editorMarkDirty();
+                    self._editorCancelRound();
+                    self._editorRenderSeries();
+                    self._editorRenderRounds();
+                }
+            } else if (item && !e.target.classList.contains('editor-series-name-input')) {
+                self._editorSelectSeries(parseInt(item.dataset.index, 10));
+            }
+        });
+        document.getElementById('editor-series-list').addEventListener('change', (e) => {
+            const inp = e.target.closest('.editor-series-name-input');
+            if (inp) {
+                const idx = parseInt(inp.dataset.index, 10);
+                self.editor.data.series[idx].name = inp.value;
+                self._editorMarkDirty();
+            }
+        });
+
+        // Event delegation for editor rounds list
+        document.getElementById('editor-rounds-list').addEventListener('click', (e) => {
+            const editBtn = e.target.closest('.editor-round-edit-btn');
+            const delBtn = e.target.closest('.editor-round-del');
+            if (editBtn) {
+                self._editorEditRound(parseInt(editBtn.dataset.index, 10));
+            } else if (delBtn) {
+                const ri = parseInt(delBtn.dataset.index, 10);
+                const s = self.editor.data.series[self.editor.selectedSeries];
+                const round = s.rounds[ri];
+                if (!confirm(`Удалить раунд ${ri+1} (${round.image})?`)) return;
+                if (Api.isServer && round.image && confirm('Также удалить файл изображения с диска?')) {
+                    Api.deleteLocationImage(round.image).catch(() => {});
+                }
+                s.rounds.splice(ri, 1);
+                self._editorMarkDirty();
+                if (self.editor.selectedRound === ri) {
+                    self._editorCancelRound();
+                } else if (self.editor.selectedRound > ri) {
+                    self.editor.selectedRound--;
+                }
+                self._editorRenderRounds();
+            }
+        });
     },
 
     // ================================================
@@ -387,42 +444,6 @@ const Tools = {
 
         list.innerHTML = '';
         list.appendChild(frag);
-
-        list.querySelectorAll('.editor-series-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                if (e.target.classList.contains('editor-series-del') ||
-                    e.target.classList.contains('editor-series-name-input')) return;
-                this._editorSelectSeries(parseInt(item.dataset.index, 10));
-            });
-        });
-
-        list.querySelectorAll('.editor-series-name-input').forEach(inp => {
-            inp.addEventListener('change', (e) => {
-                const idx = parseInt(e.target.dataset.index, 10);
-                this.editor.data.series[idx].name = e.target.value;
-                this._editorMarkDirty();
-            });
-        });
-
-        list.querySelectorAll('.editor-series-del').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const idx = parseInt(btn.dataset.index, 10);
-                const seriesList = this.editor.data.series;
-                if (confirm(`Удалить серию "${seriesList[idx].name}"?`)) {
-                    seriesList.splice(idx, 1);
-                    if (this.editor.selectedSeries >= seriesList.length) {
-                        this.editor.selectedSeries = -1;
-                    } else if (this.editor.selectedSeries > idx) {
-                        this.editor.selectedSeries--;
-                    }
-                    this._editorMarkDirty();
-                    this._editorCancelRound();
-                    this._editorRenderSeries();
-                    this._editorRenderRounds();
-                }
-            });
-        });
     },
 
     _editorSelectSeries(index) {
@@ -495,34 +516,6 @@ const Tools = {
             frag.appendChild(item);
         });
         list.appendChild(frag);
-
-        list.querySelectorAll('.editor-round-edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this._editorEditRound(parseInt(btn.dataset.index, 10));
-            });
-        });
-
-        list.querySelectorAll('.editor-round-del').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const ri = parseInt(btn.dataset.index, 10);
-                const s = this.editor.data.series[this.editor.selectedSeries];
-                const round = s.rounds[ri];
-                if (!confirm(`Удалить раунд ${ri+1} (${round.image})?`)) return;
-                if (Api.isServer && round.image && confirm('Также удалить файл изображения с диска?')) {
-                    try {
-                        await Api.deleteLocationImage(round.image);
-                    } catch (_) {}
-                }
-                s.rounds.splice(ri, 1);
-                this._editorMarkDirty();
-                if (this.editor.selectedRound === ri) {
-                    this._editorCancelRound();
-                } else if (this.editor.selectedRound > ri) {
-                    this.editor.selectedRound--;
-                }
-                this._editorRenderRounds();
-            });
-        });
     },
 
     _editorAddRound() {

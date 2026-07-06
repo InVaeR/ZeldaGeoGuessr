@@ -76,13 +76,22 @@ const GameMap = {
             });
         }
 
-        new L.TileLayer.CustomSimple('', {
+        const layer = new L.TileLayer.CustomSimple('', {
             tileSize: CONFIG.TILE_SIZE,
             minZoom: CONFIG.MIN_ZOOM,
             maxZoom: CONFIG.MAX_ZOOM,
             noWrap: true,
             bounds: this.getBounds()
         }).addTo(map);
+
+        let fallbackDone = false;
+        layer.on('tileerror', () => {
+            if (fallbackDone) return;
+            fallbackDone = true;
+            map.removeLayer(layer);
+            const bounds = this.getBounds();
+            L.imageOverlay(CONFIG.MAP_IMAGE, bounds).addTo(map);
+        });
     },
 
     // ========================

@@ -148,6 +148,8 @@ const UI = {
         this.els.finalSummary.innerHTML = '';
         this.els.finalSummary.appendChild(frag);
         this.els.finalScore.textContent = totalScore;
+        const maxScoreEl = document.getElementById('final-max-score');
+        if (maxScoreEl) maxScoreEl.textContent = roundResults.length * CONFIG.MAX_ROUND_SCORE;
     },
 
     // ========================

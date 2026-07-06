@@ -25,6 +25,15 @@
         async init() {
             UI.init();
             await this._detectServer();
+            if (CONFIG.IS_SERVER) {
+                try {
+                    const r = await fetch('/api/series');
+                    if (r.ok) {
+                        const data = await r.json();
+                        LOCATIONS_DATA.series = data.series || data;
+                    }
+                } catch (_) {}
+            }
             this.rerenderMenu();
 
             UI.els.btnConfirm.addEventListener('click', () => this.onConfirm());

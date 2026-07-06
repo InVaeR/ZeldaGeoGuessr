@@ -16,6 +16,17 @@ import (
 
 var safeFilenameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
+func checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		origin = r.Header.Get("Referer")
+	}
+	if origin == "" {
+		return true
+	}
+	return strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") || strings.Contains(origin, "::1")
+}
+
 // ========================
 //  ЧТЕНИЕ СЕРИЙ
 // ========================
@@ -59,6 +70,10 @@ func handleSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 func handleSaveSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !checkOrigin(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -119,6 +134,10 @@ func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !checkOrigin(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize+1<<20)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
@@ -170,10 +189,11 @@ func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string
 	}
 
 	destPath := filepath.Join(locsDir, filename)
-	// Дополнительная проверка: путь должен оставаться внутри locsDir
+	// Проверка: путь должен оставаться внутри locsDir
 	absLocs, _ := filepath.Abs(locsDir)
 	absDest, _ := filepath.Abs(destPath)
-	if !strings.HasPrefix(absDest, absLocs) {
+	rel, err := filepath.Rel(absLocs, absDest)
+	if err != nil || strings.HasPrefix(rel, "..") {
 		http.Error(w, "Недопустимый путь", http.StatusBadRequest)
 		return
 	}
@@ -206,6 +226,10 @@ func handleDeleteLocationImage(w http.ResponseWriter, r *http.Request, webRoot s
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !checkOrigin(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
@@ -229,7 +253,8 @@ func handleDeleteLocationImage(w http.ResponseWriter, r *http.Request, webRoot s
 
 	absLocs, _ := filepath.Abs(locsDir)
 	absFile, _ := filepath.Abs(filePath)
-	if !strings.HasPrefix(absFile, absLocs) {
+	rel, err := filepath.Rel(absLocs, absFile)
+	if err != nil || strings.HasPrefix(rel, "..") {
 		http.Error(w, "Недопустимый путь", http.StatusBadRequest)
 		return
 	}
