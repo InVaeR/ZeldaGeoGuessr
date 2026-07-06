@@ -63,7 +63,6 @@ const Tools = {
         editMarker: null,
         dirty: false,
         _roundSnapshot: null,
-        _uidCounter: 0,
         pendingDeletes: null
     },
 
@@ -76,7 +75,6 @@ const Tools = {
         this.editor.data = structuredClone(LOCATIONS_DATA);
         this.editor.dirty = false;
         this.editor.pendingDeletes = new Set();
-        this._assignUids();
 
         UI.showScreen('tools');
 
@@ -101,14 +99,12 @@ const Tools = {
             if (!confirm('Есть несохранённые изменения. Применить в память? (на диск НЕ записано)')) {
                 if (this.editor.pendingDeletes) this.editor.pendingDeletes.clear();
                 this.editor.data = structuredClone(LOCATIONS_DATA);
-                this._assignUids();
                 this.editor.dirty = false;
                 this._editorRenderSeries();
                 this._editorRenderRounds();
             } else {
                 LOCATIONS_DATA.series = structuredClone(this.editor.data.series);
                 this.editor.data = structuredClone(LOCATIONS_DATA);
-                this._assignUids();
                 this.editor.dirty = false;
             }
         }
@@ -568,7 +564,6 @@ const Tools = {
             x: 9000,
             y: 7500
         };
-        newRound._uid = ++this.editor._uidCounter;
         series.rounds.push(newRound);
 
         this._editorMarkDirty();
@@ -578,24 +573,6 @@ const Tools = {
 
     _editorMarkDirty() {
         this.editor.dirty = true;
-    },
-
-    _assignUids() {
-        this.editor._uidCounter = 0;
-        this.editor.data.series.forEach(s => {
-            s.rounds.forEach(r => {
-                r._uid = ++this.editor._uidCounter;
-            });
-        });
-    },
-
-    _stripUids(obj) {
-        if (Array.isArray(obj)) {
-            obj.forEach(v => this._stripUids(v));
-        } else if (obj && typeof obj === 'object') {
-            delete obj._uid;
-            Object.values(obj).forEach(v => this._stripUids(v));
-        }
     },
 
     _editorCommitRoundForm() {
@@ -828,7 +805,6 @@ const Tools = {
         }
 
         const cleanData = structuredClone(data);
-        this._stripUids(cleanData);
 
         if (!Api.isServer) {
             const json = JSON.stringify(cleanData, null, 4);
@@ -842,7 +818,6 @@ const Tools = {
 
             LOCATIONS_DATA.series = structuredClone(data.series);
             this.editor.data = structuredClone(LOCATIONS_DATA);
-            this._assignUids();
             this.editor.dirty = false;
             window.Game.rerenderMenu();
             this._editorRenderSeries();
@@ -857,7 +832,6 @@ const Tools = {
             await this._processPendingDeletes();
             LOCATIONS_DATA.series = structuredClone(data.series);
             this.editor.data = structuredClone(LOCATIONS_DATA);
-            this._assignUids();
             this.editor.dirty = false;
             window.Game.rerenderMenu();
             this._editorRenderSeries();

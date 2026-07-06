@@ -89,7 +89,7 @@ const UI = {
     // ========================
 
     showLocationImage(imagePath) {
-        this.els.locationImage.src = `${CONFIG.LOCS_PATH}/${imagePath}`;
+        this.els.locationImage.src = `${CONFIG.LOCS_PATH}/${imagePath}?v=${Date.now()}`;
         this.els.locationPanel.classList.remove('collapsed');
         this.els.btnToggleImage.textContent = '▼';
     },
