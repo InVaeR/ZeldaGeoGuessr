@@ -75,6 +75,7 @@ const Tools = {
         this.cal.currentD = CONFIG.CALIBRATION_D;
         this.editor.data = structuredClone(LOCATIONS_DATA);
         this.editor.dirty = false;
+        this.editor.pendingDeletes = new Set();
         this._assignUids();
 
         UI.showScreen('tools');
@@ -98,6 +99,7 @@ const Tools = {
         document.getElementById('editor-round-edit').style.display = 'none';
         if (this.editor.dirty) {
             if (!confirm('Есть несохранённые изменения. Применить в память? (на диск НЕ записано)')) {
+                if (this.editor.pendingDeletes) this.editor.pendingDeletes.clear();
                 this.editor.data = structuredClone(LOCATIONS_DATA);
                 this._assignUids();
                 this.editor.dirty = false;
@@ -214,13 +216,6 @@ const Tools = {
                 self._editorMarkDirty();
                 if (idx === self.editor.selectedSeries) {
                     document.getElementById('editor-series-name').textContent = inp.value;
-                    const seriesItems = document.querySelectorAll('#editor-series-list .editor-item');
-                    seriesItems.forEach(function (el) {
-                        const nameEl = el.querySelector('.editor-series-name-input');
-                        if (nameEl && parseInt(nameEl.dataset.index, 10) === idx) {
-                            nameEl.value = inp.value;
-                        }
-                    });
                 }
             }
         });
@@ -239,11 +234,11 @@ const Tools = {
                 if (Api.isServer && round.image && confirm('Также удалить файл изображения с диска?')) {
                     const isUsed = self.editor.data.series.some(function (sr) {
                         return sr.rounds.some(function (rr) {
-                            return rr.image === round.image;
+                            return rr !== round && rr.image === round.image;
                         });
                     });
                     if (isUsed) {
-                        alert(`Файл "${round.image}" используется в другом раунде — удаление отменено.`);
+                        self._editorShowStatus(`⚠ Файл "${round.image}" используется в другом раунде — удаление отменено.`, 'error');
                     } else {
                         if (!self.editor.pendingDeletes) self.editor.pendingDeletes = new Set();
                         self.editor.pendingDeletes.add(round.image);
@@ -279,6 +274,10 @@ const Tools = {
 
         if (tabId !== 'tab-calibration') {
             this._calClearMarkers();
+        }
+        if (tabId !== 'tab-editor' && this.editor.editMarker) {
+            this.map.removeLayer(this.editor.editMarker);
+            this.editor.editMarker = null;
         }
     },
 
@@ -377,6 +376,7 @@ const Tools = {
         document.getElementById('cal-d-slider').value = Math.min(Math.max(d, 200), 5000);
         document.getElementById('cal-d-input').value = d;
         document.getElementById('cal-d-label').textContent = d;
+        document.getElementById('cal-unit').textContent = '/ ' + CONFIG.MAX_ROUND_SCORE;
     },
 
     _calUpdateScoreTable() {
@@ -477,7 +477,12 @@ const Tools = {
         this._editorCommitRoundForm();
         this.editor.selectedSeries = index;
         this.editor.selectedRound = -1;
+        this.editor._roundSnapshot = null;
         document.getElementById('editor-round-edit').style.display = 'none';
+        if (this.editor.editMarker) {
+            this.map.removeLayer(this.editor.editMarker);
+            this.editor.editMarker = null;
+        }
         this._editorRenderSeries();
         this._editorRenderRounds();
     },
@@ -600,8 +605,10 @@ const Tools = {
         const round = this.editor.data.series[idx].rounds[ri];
         const prev = { image: round.image, x: round.x, y: round.y };
         round.image = document.getElementById('editor-round-image').value;
-        round.x = parseInt(document.getElementById('editor-round-x').value, 10) || 0;
-        round.y = parseInt(document.getElementById('editor-round-y').value, 10) || 0;
+        const nx = parseInt(document.getElementById('editor-round-x').value, 10);
+        const ny = parseInt(document.getElementById('editor-round-y').value, 10);
+        if (!isNaN(nx)) round.x = nx;
+        if (!isNaN(ny)) round.y = ny;
         if (prev.image !== round.image || prev.x !== round.x || prev.y !== round.y) {
             this._editorMarkDirty();
         }
@@ -610,6 +617,11 @@ const Tools = {
     _editorEditRound(roundIndex) {
         const idx = this.editor.selectedSeries;
         if (idx < 0) return;
+
+        if (this.editor.selectedRound >= 0 && this.editor.selectedRound !== roundIndex) {
+            this._editorCommitRoundForm();
+            this.editor._roundSnapshot = null;
+        }
 
         this.editor.selectedRound = roundIndex;
 

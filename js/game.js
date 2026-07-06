@@ -45,7 +45,6 @@
 
             await this._detectServer();
             if (CONFIG.IS_SERVER) {
-                UI.els.seriesList.innerHTML = '<div class="menu-loading">Загрузка...</div>';
                 try {
                     const r = await fetch('/api/series', { signal: AbortSignal.timeout(5000) });
                     if (r.ok) {
@@ -68,7 +67,7 @@
             UI.updateHUD(this.currentSeries.name, 1, this.currentSeries.rounds.length, 0);
             UI.showScreen('game');
 
-            this.gameMap = GameMap.create('map');
+            this.gameMap = GameMap.recreate('map', this.gameMap);
             this.startRound();
         },
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,7 +18,18 @@ import (
 
 var safeFilenameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
+func isLocalHost(hostport string) bool {
+	h, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		h = hostport
+	}
+	return h == "localhost" || h == "127.0.0.1" || h == "::1"
+}
+
 func checkOrigin(r *http.Request) bool {
+	if !isLocalHost(r.Host) {
+		return false
+	}
 	raw := r.Header.Get("Origin")
 	if raw == "" {
 		raw = r.Header.Get("Referer")
@@ -26,22 +38,17 @@ func checkOrigin(r *http.Request) bool {
 		return true
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme == "" || u.Host == "" {
+	if err != nil || u.Scheme == "" {
 		return false
 	}
 	if u.Scheme == "file" {
 		return true
 	}
-	if u.Host == r.Host {
-		return true
-	}
-	allowed := []string{"localhost", "127.0.0.1"}
-	for _, a := range allowed {
-		if u.Host == a || strings.HasPrefix(u.Host, a+":") {
-			return true
-		}
-	}
-	return false
+	return isLocalHost(u.Host)
+}
+
+func setNoCache(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
 }
 
 // ========================
@@ -49,6 +56,7 @@ func checkOrigin(r *http.Request) bool {
 // ========================
 
 func handleSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
+	setNoCache(w)
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -67,34 +75,9 @@ func handleSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 		http.Error(w, "Не найден маркер LOCATIONS_DATA", http.StatusInternalServerError)
 		return
 	}
-	jsonStart := markerIdx + len(marker)
-	// ищем первый { после маркера
-	braceStart := strings.Index(content[jsonStart:], "{")
-	if braceStart == -1 {
-		http.Error(w, "Не найден JSON в locations_data.js", http.StatusInternalServerError)
-		return
-	}
-	braceStart += jsonStart
-	// балансируем скобки чтобы найти закрывающую
-	depth := 0
-	endIdx := -1
-	for i := braceStart; i < len(content); i++ {
-		ch := content[i]
-		if ch == '{' {
-			depth++
-		} else if ch == '}' {
-			depth--
-			if depth == 0 {
-				endIdx = i
-				break
-			}
-		}
-	}
-	if endIdx == -1 {
-		http.Error(w, "Непарные скобки в locations_data.js", http.StatusInternalServerError)
-		return
-	}
-	jsonStr := content[braceStart : endIdx+1]
+	jsonStr := strings.TrimSpace(content[markerIdx+len(marker):])
+	jsonStr = strings.TrimSuffix(jsonStr, ";")
+	jsonStr = strings.TrimSpace(jsonStr)
 
 	// Проверяем что это валидный JSON
 	var check interface{}
@@ -112,6 +95,7 @@ func handleSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 // ========================
 
 func handleSaveSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
+	setNoCache(w)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -156,8 +140,14 @@ func handleSaveSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 
 	cleanOldBackups(webRoot, 20)
 
-	if err := os.WriteFile(dataPath, []byte(jsContent), 0644); err != nil {
+	tmpPath := dataPath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(jsContent), 0644); err != nil {
 		http.Error(w, "Ошибка записи файла", http.StatusInternalServerError)
+		return
+	}
+	if err := os.Rename(tmpPath, dataPath); err != nil {
+		os.Remove(tmpPath)
+		http.Error(w, "Ошибка сохранения файла", http.StatusInternalServerError)
 		return
 	}
 
@@ -174,6 +164,7 @@ func handleSaveSeries(w http.ResponseWriter, r *http.Request, webRoot string) {
 // ========================
 
 func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string) {
+	setNoCache(w)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -242,15 +233,24 @@ func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string
 		return
 	}
 
-	dst, err := os.Create(destPath)
+	tmpPath := destPath + ".tmp"
+	dst, err := os.Create(tmpPath)
 	if err != nil {
 		http.Error(w, "Ошибка создания файла", http.StatusInternalServerError)
 		return
 	}
-	defer dst.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
+		dst.Close()
+		os.Remove(tmpPath)
 		http.Error(w, "Ошибка записи файла", http.StatusInternalServerError)
+		return
+	}
+	dst.Close()
+
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		os.Remove(tmpPath)
+		http.Error(w, "Ошибка сохранения файла", http.StatusInternalServerError)
 		return
 	}
 
@@ -266,6 +266,7 @@ func handleUploadLocation(w http.ResponseWriter, r *http.Request, webRoot string
 // ========================
 
 func handleDeleteLocationImage(w http.ResponseWriter, r *http.Request, webRoot string) {
+	setNoCache(w)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

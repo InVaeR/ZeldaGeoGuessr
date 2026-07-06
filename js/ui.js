@@ -158,10 +158,15 @@ const UI = {
 
     renderSeriesList(seriesList, onSelect) {
         this.els.seriesList.innerHTML = '';
+        if (!seriesList || seriesList.length === 0) {
+            this.els.seriesList.innerHTML = '<div class="menu-empty">Нет серий. Создайте в ⚙ Инструменты → Редактор</div>';
+            return;
+        }
         seriesList.forEach((series, index) => {
+            const rounds = series.rounds || [];
             const btn = document.createElement('button');
             btn.className = 'btn-series';
-            if (series.rounds.length === 0) {
+            if (rounds.length === 0) {
                 btn.disabled = true;
                 btn.textContent = series.name + ' (нет раундов)';
             } else {
@@ -266,37 +271,25 @@ const UI = {
         img.src = this.els.locationImage.src;
         overlay.classList.add('active');
 
-        const errorOverlay = document.getElementById('viewer-error');
-        if (errorOverlay) errorOverlay.style.display = 'none';
-        img.onerror = () => {
-            const el = document.getElementById('viewer-error') || (() => {
+        function showError() {
+            const el = document.getElementById('viewer-error') || (function () {
                 const e = document.createElement('div');
                 e.id = 'viewer-error';
-                e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:1.1rem;background:rgba(0,0,0,0.7);z-index:2002;';
+                e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:1.1rem;background:rgba(0,0,0,0.7);z-index:2002;pointer-events:none;';
                 e.textContent = 'Не удалось загрузить изображение';
                 container.appendChild(e);
                 return e;
             })();
             el.style.display = 'flex';
-        };
-        img.onload = () => { img.onerror = null; };
-
-        window.addEventListener('mousemove', this.viewer._onMove);
-        window.addEventListener('mouseup', this.viewer._onUp);
-
-        if (!this.viewer._escHandler) {
-            this.viewer._escHandler = (e) => {
-                if (e.key === 'Escape') self.closeViewer();
-            };
-            document.addEventListener('keydown', this.viewer._escHandler);
+        }
+        function hideError() {
+            const el = document.getElementById('viewer-error');
+            if (el) el.style.display = 'none';
         }
 
-        if (!this.viewer._resizeHandler) {
-            this.viewer._resizeHandler = () => self._viewerFit();
-            window.addEventListener('resize', this.viewer._resizeHandler);
-        }
+        hideError();
 
-        const doFit = () => {
+        const doFit = function () {
             self.viewer.imgWidth = img.naturalWidth;
             self.viewer.imgHeight = img.naturalHeight;
             requestAnimationFrame(() => {
@@ -304,10 +297,27 @@ const UI = {
             });
         };
 
+        img.onload = function () { hideError(); doFit(); };
+        img.onerror = showError;
+
         if (img.complete && img.naturalWidth > 0) {
+            hideError();
             doFit();
-        } else {
-            img.onload = doFit;
+        }
+
+        window.addEventListener('mousemove', this.viewer._onMove);
+        window.addEventListener('mouseup', this.viewer._onUp);
+
+        if (!this.viewer._escHandler) {
+            this.viewer._escHandler = function (e) {
+                if (e.key === 'Escape') self.closeViewer();
+            };
+            document.addEventListener('keydown', this.viewer._escHandler);
+        }
+
+        if (!this.viewer._resizeHandler) {
+            this.viewer._resizeHandler = function () { self._viewerFit(); };
+            window.addEventListener('resize', this.viewer._resizeHandler);
         }
     },
 

@@ -105,6 +105,19 @@ body {
     gap: 12px;
 }
 
+.menu-loading {
+    color: var(--color-text-muted);
+    padding: 20px;
+    font-style: italic;
+}
+
+.menu-empty {
+    color: var(--color-text-dim);
+    padding: 20px;
+    text-align: center;
+    font-size: 0.95rem;
+}
+
 .btn-series {
     padding: 16px 32px;
     font-size: 1.1rem;

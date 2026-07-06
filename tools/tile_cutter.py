@@ -22,7 +22,7 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
 # Настройки
-SOURCE = "../map/full_map.jpg"
+SOURCE = "../map/map_high.jpg"
 OUTPUT = "../map_tiles"
 TILE_SIZE = 512
 
