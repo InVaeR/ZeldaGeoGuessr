@@ -855,20 +855,32 @@ body {
     background: rgba(126, 200, 227, 0.08);
 }
 
-.editor-series-name-input {
+.editor-series-name-input,
+.editor-series-name {
     flex: 1;
     background: transparent;
     color: #ccc;
     border: none;
-    border-bottom: 1px solid transparent;
     font-size: 0.85rem;
     padding: 2px 0;
     outline: none;
 }
 
+.editor-series-name-input {
+    border-bottom: 1px solid #7ec8e3;
+    color: #fff;
+}
+
 .editor-series-name-input:focus {
     border-bottom-color: #7ec8e3;
     color: #fff;
+}
+
+.editor-series-name {
+    cursor: default;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .editor-series-count {
@@ -881,22 +893,29 @@ body {
 .editor-series-del {
     background: none;
     border: none;
-    color: #555;
+    color: #444;
     cursor: pointer;
-    font-size: 0.85rem;
-    padding: 2px 4px;
+    font-size: 0.8rem;
+    padding: 2px 5px;
     border-radius: 3px;
-    transition: all 0.1s;
+    transition: all 0.12s;
+    opacity: 0.5;
+    line-height: 1;
+}
+
+.editor-series-item:hover .editor-series-edit-btn,
+.editor-series-item:hover .editor-series-del {
+    opacity: 1;
 }
 
 .editor-series-edit-btn:hover {
     color: #7ec8e3;
-    background: rgba(126, 200, 227, 0.15);
+    opacity: 1;
 }
 
 .editor-series-del:hover {
     color: #e94560;
-    background: rgba(233, 69, 96, 0.15);
+    opacity: 1;
 }
 
 /* Список раундов */
