@@ -2,7 +2,7 @@ const LOCATIONS_DATA = {
         "series": [
             {
                 "id": 2,
-                "name": "очевидное невероятное",
+                "name": "Очевидное невероятное",
                 "rounds": [
                     {
                         "image": "location_s02_i01.png",
@@ -16,8 +16,8 @@ const LOCATIONS_DATA = {
                     },
                     {
                         "image": "location_s02_i03.png",
-                        "x": 6594,
-                        "y": 6988
+                        "x": 6650,
+                        "y": 6931
                     },
                     {
                         "image": "location_s02_i04.png",
@@ -31,15 +31,10 @@ const LOCATIONS_DATA = {
                     },
                     {
                         "image": "location_s02_i06.png",
-                        "x": 8667,
-                        "y": 10642
+                        "x": 10716,
+                        "y": 4743
                     }
                 ]
-            },
-            {
-                "id": 3,
-                "name": "Новая серия 3",
-                "rounds": []
             }
         ]
     };

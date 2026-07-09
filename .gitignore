@@ -1,10 +1,5 @@
-# Большая карта
-map/
-
-# Папка с тайлами
-map_tiles/
-
-locs/
+# Карта (превышает лимит GitHub 100MB)
+map/full_map.jpg
 
 # Системные файлы
 .DS_Store
@@ -25,4 +20,3 @@ audit.md
 AGENTS.md
 
 # Бинарники
-*.exe
